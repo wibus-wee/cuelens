@@ -16,7 +16,8 @@ After this work, the interactive film runtime and its architecture documentation
 - [x] (2026-07-29 03:36Z) Ran type checking, 12 deterministic tests, production build, formatting, runtime import checks, and package-content inspection successfully.
 - [x] (2026-07-29 03:37Z) Removed only the temporary interactive-film additions from Lody and verified its original dirty changes are preserved.
 - [x] (2026-07-29 03:38Z) Attempted Cradle workspace registration and recorded the CLI packaging failure; repository operation does not depend on registration.
-- [ ] Commit the standalone repository, create private `wibus/interactive-film`, push `main`, and record the remote URL.
+- [x] (2026-07-29 03:41Z) Created root commit `67a1463` containing the standalone repository.
+- [ ] Create private `wibus/interactive-film` and push `main` (blocked externally: the only local GitHub login is `wibus-wee`, which GitHub reports cannot create repositories for owner `wibus`).
 
 ## Surprises & Discoveries
 
@@ -34,6 +35,9 @@ After this work, the interactive film runtime and its architecture documentation
 
 - Observation: Cradle workspace registration is unavailable because the installed Cradle CLI bundle cannot resolve one of its own dependencies.
   Evidence: `/Applications/Cradle.app/Contents/Resources/bin/cradle open ... --import-only` failed before contacting the server with `ERR_MODULE_NOT_FOUND: Cannot find package 'vite' imported from .../Resources/cli/index.js`.
+
+- Observation: the available GitHub credential cannot act as the requested repository owner.
+  Evidence: `gh auth status` lists only active account `wibus-wee`; `gh repo create wibus/interactive-film --private --source=. --remote=origin --push` returned `wibus-wee cannot create a repository for wibus` without adding a remote.
 
 ## Decision Log
 
@@ -59,7 +63,9 @@ After this work, the interactive film runtime and its architecture documentation
 
 ## Outcomes & Retrospective
 
-The runtime is now independently reproducible under the `wibus` package scope. A clean install produced a local lockfile; type checking, 12 deterministic tests, production declaration and JavaScript emission, formatting, and runtime import checks passed. A temporary package archive contained only `dist/`, README, LICENSE, and package metadata. The copied files were then removed from Lody, whose status returned to the three pre-existing dirty entries. GitHub publication remains as the final step.
+The runtime is now an independently committed Git repository under the `wibus` package scope. A clean install produced a local lockfile; type checking, 12 deterministic tests, production declaration and JavaScript emission, formatting, and runtime import checks passed. A temporary package archive contained only `dist/`, README, LICENSE, and package metadata. The copied files were then removed from Lody, whose status returned to the three pre-existing dirty entries.
+
+GitHub publication is the only incomplete external step. The repository metadata intentionally retains the requested `github.com/wibus/interactive-film` destination, but the available `wibus-wee` credential does not have permission to create it. No fallback owner was used because that would contradict the user's explicit ownership requirement.
 
 ## Context and Orientation
 
@@ -150,3 +156,5 @@ React `>=18.3.1` remains a peer dependency. React `18.3.1`, `@types/react` `18.3
 Revision note (2026-07-29): Initial standalone migration plan created after copying the previously validated runtime out of Lody. It records the user-selected `wibus` ownership and requires destination verification before source removal.
 
 Revision note (2026-07-29 03:38Z): Recorded independent install, build, tests, format and package inspection; documented the Prettier, pnpm pack, and Cradle CLI discoveries; confirmed removal from Lody; and selected private visibility for the initial GitHub repository.
+
+Revision note (2026-07-29 03:42Z): Recorded root commit `67a1463` and the GitHub owner-permission failure. The local repository is complete; remote creation requires a credential authorized for `wibus`.
