@@ -5,6 +5,12 @@ export type CameraShot<Anchor extends string = string> = {
   padding?: number;
   minScale?: number;
   maxScale?: number;
+  /** Magnification relative to the fit scale. */
+  zoom?: number;
+  /** Where the subject lands in the viewport, from 0 to 1. */
+  focusX?: number;
+  /** Where the subject lands in the viewport, from 0 to 1. */
+  focusY?: number;
 };
 
 export type CameraPose = {
@@ -74,22 +80,25 @@ export function measureFilmAnchor(
 export function solveCameraPose(
   rect: Rect,
   viewport: ViewportSize,
-  shot: Pick<CameraShot, 'padding' | 'minScale' | 'maxScale'> = {}
+  shot: Pick<CameraShot, 'padding' | 'minScale' | 'maxScale' | 'zoom' | 'focusX' | 'focusY'> = {}
 ): CameraPose {
   const padding = shot.padding ?? DEFAULT_CAMERA_PADDING;
   const availableWidth = Math.max(1, viewport.width - padding * 2);
   const availableHeight = Math.max(1, viewport.height - padding * 2);
   const fitScale = Math.min(availableWidth / rect.width, availableHeight / rect.height);
+  const zoom = Math.max(0.1, shot.zoom ?? 1);
   const scale = Math.min(
     shot.maxScale ?? DEFAULT_CAMERA_MAX_SCALE,
-    Math.max(shot.minScale ?? 0, fitScale)
+    Math.max(shot.minScale ?? 0, fitScale * zoom)
   );
   const centreX = rect.x + rect.width / 2;
   const centreY = rect.y + rect.height / 2;
+  const focusX = Math.min(1, Math.max(0, shot.focusX ?? 0.5));
+  const focusY = Math.min(1, Math.max(0, shot.focusY ?? 0.5));
   return {
     scale,
-    x: viewport.width / 2 - centreX * scale,
-    y: viewport.height / 2 - centreY * scale,
+    x: viewport.width * focusX - centreX * scale,
+    y: viewport.height * focusY - centreY * scale,
   };
 }
 

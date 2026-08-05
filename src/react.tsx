@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -21,11 +22,19 @@ import {
   resolveFilmAnchor,
   solveCameraPose,
   stepCamera,
+  type CameraShot,
   type AnchorResolver,
 } from './camera.ts';
 import { createFilmClock, type FilmClock, type FilmClockSnapshot } from './clock.ts';
 import { createCueController } from './cues.ts';
 import { frameAt, type AnyFilmDefinition, type FilmCue, type FilmFrame } from './definition.ts';
+import {
+  createFilmStepController,
+  type AnyFilmStepDefinition,
+  type FilmStepController,
+  type FilmStepSelector,
+  type FilmStepSnapshot,
+} from './steps.ts';
 
 type FilmContextValue = {
   clock: FilmClock;
@@ -125,22 +134,87 @@ export function useFilmCues<Cue extends FilmCue>(options: {
   }, [clock, cues]);
 }
 
+type FilmStepContextValue = {
+  controller: FilmStepController;
+  definition: AnyFilmStepDefinition;
+};
+
+const FilmStepContext = createContext<FilmStepContextValue | null>(null);
+
+export type FilmStepProviderProps = {
+  definition: AnyFilmStepDefinition;
+  controller?: FilmStepController;
+  initialStep?: FilmStepSelector;
+  children: ReactNode;
+};
+
+/** Provides a host-controlled step sequence for semi-automatic films. */
+export function FilmStepProvider({
+  definition,
+  controller: externalController,
+  initialStep,
+  children,
+}: FilmStepProviderProps): React.JSX.Element {
+  const [ownedController] = useState(() =>
+    externalController ? null : createFilmStepController({ definition, initialStep })
+  );
+  const controller = externalController ?? ownedController!;
+
+  return (
+    <FilmStepContext.Provider value={{ controller, definition }}>
+      {children}
+    </FilmStepContext.Provider>
+  );
+}
+
+function useFilmStepContext(): FilmStepContextValue {
+  const value = useContext(FilmStepContext);
+  if (!value) throw new Error('Semi-automatic film hooks must be used within FilmStepProvider.');
+  return value;
+}
+
+export function useFilmStepController(): FilmStepController {
+  return useFilmStepContext().controller;
+}
+
+export function useFilmStepSnapshot(): FilmStepSnapshot {
+  const controller = useFilmStepController();
+  return useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
+}
+
+/** A compact step API for onboarding-like hosts that drive the film manually. */
+export function useFilmStep(): FilmStepSnapshot &
+  Pick<FilmStepController, 'next' | 'previous' | 'goTo' | 'reset'> {
+  const controller = useFilmStepController();
+  const snapshot = useFilmStepSnapshot();
+  return {
+    ...snapshot,
+    next: controller.next,
+    previous: controller.previous,
+    goTo: controller.goTo,
+    reset: controller.reset,
+  };
+}
+
 export type UseFilmCameraOptions<Anchor extends string = string> = {
   viewportRef: RefObject<HTMLElement | null>;
   stageRef: RefObject<HTMLElement | null>;
   resolveAnchor?: AnchorResolver<Anchor>;
 };
 
-/**
- * Runs camera physics outside React. Story time selects the target; a separate
- * frame loop lets the physical camera finish settling while story time pauses.
- */
-export function useFilmCamera<Anchor extends string = string>({
-  viewportRef,
-  stageRef,
-  resolveAnchor: customResolver,
-}: UseFilmCameraOptions<Anchor>): { refresh: () => void } {
-  const { clock, definition } = useFilmContext();
+type CameraSource = {
+  getShot: () => CameraShot<string> | null;
+  subscribe: (listener: () => void) => () => void;
+  shouldAnimate: () => boolean;
+};
+
+function useImperativeFilmCamera<Anchor extends string = string>(options: {
+  viewportRef: RefObject<HTMLElement | null>;
+  stageRef: RefObject<HTMLElement | null>;
+  resolveAnchor?: AnchorResolver<Anchor>;
+  source: CameraSource;
+}): { refresh: () => void } {
+  const { viewportRef, stageRef, resolveAnchor: customResolver, source } = options;
   const startRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
@@ -160,22 +234,23 @@ export function useFilmCamera<Anchor extends string = string>({
       if (disposed) return;
       const viewport = viewportRef.current;
       const stage = stageRef.current;
-      const snapshot = clock.getSnapshot();
       if (!viewport || !stage) {
-        if (snapshot.playing) schedule();
+        if (source.shouldAnimate()) schedule();
         return;
       }
 
       const delta = previousFrameTime === null ? 0 : (now - previousFrameTime) / 1000;
       previousFrameTime = now;
-      const frame = frameAt(definition, snapshot.time);
-      const shot = frame.shot;
+      const shot = source.getShot();
       if (!shot) {
-        if (snapshot.playing) schedule();
+        if (source.shouldAnimate()) schedule();
         return;
       }
       const anchorNode = resolveFilmAnchor(stage, shot.anchor as Anchor, customResolver);
-      const viewportSize = { width: viewport.clientWidth, height: viewport.clientHeight };
+      const viewportSize = {
+        width: viewport.clientWidth,
+        height: viewport.clientHeight,
+      };
       const rect = anchorNode
         ? measureFilmAnchor(stage, anchorNode, motion.scale > 0 ? motion.scale : 1)
         : null;
@@ -185,11 +260,11 @@ export function useFilmCamera<Anchor extends string = string>({
         applyCameraPose(stage, cameraPoseFromMotion(motion, viewportSize));
       }
 
-      if (snapshot.playing || !target || !cameraAtRest(motion, target)) schedule();
+      if (source.shouldAnimate() || !target || !cameraAtRest(motion, target)) schedule();
     };
 
     startRef.current = schedule;
-    const unsubscribe = clock.subscribeTransitions(schedule);
+    const unsubscribe = source.subscribe(schedule);
     const viewport = viewportRef.current;
     const resizeObserver =
       viewport && typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null;
@@ -203,12 +278,71 @@ export function useFilmCamera<Anchor extends string = string>({
       resizeObserver?.disconnect();
       if (frameHandle !== 0) cancelAnimationFrame(frameHandle);
     };
-  }, [clock, customResolver, definition, stageRef, viewportRef]);
+  }, [customResolver, source, stageRef, viewportRef]);
 
   return { refresh: useCallback(() => startRef.current(), []) };
 }
 
-export type FilmAnchorProps = HTMLAttributes<HTMLDivElement> & { anchor: string };
+/**
+ * Runs camera physics outside React. Story time selects the target; a separate
+ * frame loop lets the physical camera finish settling while story time pauses.
+ */
+export function useFilmCamera<Anchor extends string = string>({
+  viewportRef,
+  stageRef,
+  resolveAnchor: customResolver,
+}: UseFilmCameraOptions<Anchor>): { refresh: () => void } {
+  const { clock, definition } = useFilmContext();
+  const source = useMemo<CameraSource>(
+    () => ({
+      getShot: () => frameAt(definition, clock.getSnapshot().time).shot ?? null,
+      subscribe: (listener) => clock.subscribeTransitions(listener),
+      shouldAnimate: () => clock.getSnapshot().playing,
+    }),
+    [clock, definition]
+  );
+
+  return useImperativeFilmCamera({
+    viewportRef,
+    stageRef,
+    resolveAnchor: customResolver,
+    source,
+  });
+}
+
+export type UseFilmStepCameraOptions<Anchor extends string = string> = {
+  viewportRef: RefObject<HTMLElement | null>;
+  stageRef: RefObject<HTMLElement | null>;
+  resolveAnchor?: AnchorResolver<Anchor>;
+};
+
+/** Runs the same camera physics, but changes shots only when the host changes film steps. */
+export function useFilmStepCamera<Anchor extends string = string>({
+  viewportRef,
+  stageRef,
+  resolveAnchor: customResolver,
+}: UseFilmStepCameraOptions<Anchor>): { refresh: () => void } {
+  const controller = useFilmStepController();
+  const source = useMemo<CameraSource>(
+    () => ({
+      getShot: () => controller.getSnapshot().step.shot ?? null,
+      subscribe: (listener) => controller.subscribe(listener),
+      shouldAnimate: () => false,
+    }),
+    [controller]
+  );
+
+  return useImperativeFilmCamera({
+    viewportRef,
+    stageRef,
+    resolveAnchor: customResolver,
+    source,
+  });
+}
+
+export type FilmAnchorProps = HTMLAttributes<HTMLDivElement> & {
+  anchor: string;
+};
 
 /** Convenience wrapper; use `filmAnchorProps()` when marking an existing node. */
 export const FilmAnchor = forwardRef<HTMLDivElement, FilmAnchorProps>(function FilmAnchor(
