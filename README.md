@@ -32,6 +32,7 @@ The root export has no React dependency:
 - `useFilmFrame()`;
 - `useFilmCues()`;
 - `useFilmCamera()`;
+- `FilmStepProvider`, `useFilmStep()`, and `useFilmStepCamera()` for semi-automatic hosts;
 - `FilmAnchor`.
 
 Audio, localization, product fixtures, Electron windows, cursor artwork, and the meaning of a cue stay in the host. That keeps the runtime useful outside Lody.
@@ -76,7 +77,13 @@ export const tour = defineFilm({
   ],
   cues: [
     { id: 'send', at: 4.2, anchor: 'send-button', lead: 0.8, kind: 'click' },
-    { id: 'open-panel', at: 7.4, anchor: 'changes-tab', lead: 0.7, kind: 'click' },
+    {
+      id: 'open-panel',
+      at: 7.4,
+      anchor: 'changes-tab',
+      lead: 0.7,
+      kind: 'click',
+    },
   ],
 });
 ```
@@ -146,6 +153,60 @@ import { filmAnchorProps } from '@wibus/interactive-film';
 ```
 
 Use `FilmAnchor` only when a wrapper `div` is semantically harmless.
+
+## Drive a film from host steps
+
+Use steps when the host owns the flow, such as an onboarding wizard. Each step
+can carry host-owned state and an optional camera shot. The controller changes
+only when the host calls `next()`, `previous()`, `goTo()`, or `reset()`; it does
+not create a second playhead and it does not dispatch product actions.
+
+```tsx
+import { useRef } from 'react';
+import { defineFilmSteps } from '@wibus/interactive-film';
+import { FilmStepProvider, useFilmStep, useFilmStepCamera } from '@wibus/interactive-film/react';
+
+const onboarding = defineFilmSteps({
+  steps: [
+    { id: 'welcome', state: { mode: 'welcome' }, shot: { anchor: 'window' } },
+    {
+      id: 'composer',
+      state: { mode: 'composer' },
+      shot: { anchor: 'composer', zoom: 1.4, focusX: 0.42, focusY: 0.5 },
+    },
+  ],
+});
+
+function OnboardingStage() {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const step = useFilmStep();
+
+  useFilmStepCamera({ viewportRef, stageRef });
+
+  return (
+    <div ref={viewportRef}>
+      <div ref={stageRef}>
+        <ProductFixture state={step.step.state} />
+      </div>
+      <button onClick={step.previous}>Back</button>
+      <button onClick={step.next}>Continue</button>
+    </div>
+  );
+}
+
+export function OnboardingFilm() {
+  return (
+    <FilmStepProvider definition={onboarding} initialStep="welcome">
+      <OnboardingStage />
+    </FilmStepProvider>
+  );
+}
+```
+
+The original `FilmProvider` and `useFilmCamera()` remain the fully automatic
+playhead mode. Both modes share camera anchor measurement and spring physics;
+only the source of the current shot changes.
 
 ## Playback and cue rules
 
