@@ -34,6 +34,19 @@ describe('interactive film camera', () => {
     assert.ok(Math.abs(target.centreY - 112) < 0.0001);
   });
 
+  it('supports step-driven framing with zoom and a chosen focus point', () => {
+    const pose = solveCameraPose({ x: 400, y: 100, width: 200, height: 100 }, viewport, {
+      padding: 0,
+      maxScale: 99,
+      zoom: 2,
+      focusX: 0.25,
+      focusY: 0.75,
+    });
+    assert.equal(pose.scale, 12);
+    assert.equal(pose.x, -5700);
+    assert.equal(pose.y, -1200);
+  });
+
   it('adopts the first target, then approaches later targets without teleporting', () => {
     let motion = stepCamera(createCameraMotion(), { scale: 1, centreX: 0, centreY: 0 }, 1 / 60);
     assert.equal(motion.scale, 1);
