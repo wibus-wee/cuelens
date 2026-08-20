@@ -21,7 +21,7 @@ React is a peer dependency. React hosts use the separate React entry:
 pnpm add react @wibus/interactive-film
 ```
 
-**AI install prompt:** 
+**AI install prompt:**
 
 ```
 Install @wibus/interactive-film in this project, then read node_modules/@wibus/interactive-film/install.md and node_modules/@wibus/interactive-film/dist/docs/usage.md before integrating the appropriate runtime mode into the existing UI.
