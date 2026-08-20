@@ -18,7 +18,7 @@ const film = defineFilm({
   cues: [{ id: 'press-button', at: 2.5, anchor: 'button', lead: 0.5 }],
 });
 
-describe('interactive film timeline and definition', () => {
+describe('Cuelens timeline and definition', () => {
   it('interpolates keyframes and clamps outside the authored range', () => {
     const track = [
       { time: 1, value: 10 },

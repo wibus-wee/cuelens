@@ -1,9 +1,8 @@
 # Contributing
 
-Contributions to `@wibus/interactive-film` should preserve the package's role as
-a product-neutral runtime. Product components, fixtures, localization, audio,
-navigation, privileged commands, and network access belong in host
-applications.
+Contributions to Cuelens should preserve `@wibus/cuelens` as a product-neutral
+runtime. Product components, fixtures, localization, audio, navigation,
+privileged commands, and network access belong in host applications.
 
 ## Repository map
 
@@ -47,7 +46,7 @@ may create ignored screenshots and reports under `playground/test-results/` and
 ## Change requirements
 
 - Preserve the root entry's independence from React. React integrations belong
-  in `src/react.tsx` and the `@wibus/interactive-film/react` entry.
+  in `src/react.tsx` and the `@wibus/cuelens/react` entry.
 - Keep one progression owner for a flow. Automatic clocks and host-controlled
   step controllers must not compete for the same state.
 - Keep forward seek silent and reconstruct visible state declaratively. Rewind
@@ -58,7 +57,7 @@ may create ignored screenshots and reports under `playground/test-results/` and
 - Add deterministic tests without real sleeps, wall-clock races, network
   access, or scheduler assumptions.
 - Update `docs/usage.md` for public contracts and
-  `docs/architecture/interactive-film.md` for ownership or design changes.
+  `docs/architecture/cuelens.md` for ownership or design changes.
 
 ## Pull requests
 

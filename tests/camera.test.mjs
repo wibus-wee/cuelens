@@ -9,7 +9,7 @@ import {
   stepCamera,
 } from '../src/index.ts';
 
-describe('interactive film camera', () => {
+describe('Cuelens camera', () => {
   const viewport = { width: 1200, height: 800 };
 
   it('fits wide and tall subjects without cropping', () => {

@@ -31,12 +31,7 @@ import {
   Tablet,
   WandSparkles,
 } from 'lucide-react';
-import {
-  defineFilm,
-  defineFilmSteps,
-  filmAnchorProps,
-  type CameraShot,
-} from '@wibus/interactive-film';
+import { defineFilm, defineFilmSteps, filmAnchorProps, type CameraShot } from '@wibus/cuelens';
 import {
   FilmProvider,
   FilmStepProvider,
@@ -47,7 +42,7 @@ import {
   useFilmFrame,
   useFilmStep,
   useFilmStepCamera,
-} from '@wibus/interactive-film/react';
+} from '@wibus/cuelens/react';
 
 const StudioPlayground = lazy(() =>
   import('./studio').then((module) => ({ default: module.StudioPlayground }))
@@ -224,7 +219,7 @@ export function App() {
             <Aperture size={18} strokeWidth={2.1} />
           </span>
           <div>
-            <strong>Interactive Film</strong>
+            <strong>Cuelens</strong>
             <span>Camera playground</span>
           </div>
         </div>

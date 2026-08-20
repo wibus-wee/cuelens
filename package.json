@@ -1,10 +1,11 @@
 {
-  "name": "@wibus/interactive-film",
+  "name": "@wibus/cuelens",
   "version": "0.1.0",
-  "description": "A typed runtime for interactive, camera-driven product films.",
+  "description": "Cuelens is a typed runtime for interactive, camera-driven product films.",
   "keywords": [
     "animation",
     "camera",
+    "cuelens",
     "interactive-film",
     "onboarding",
     "product-tour",
@@ -62,12 +63,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wibus-wee/interactive-film.git"
+    "url": "git+https://github.com/wibus-wee/cuelens.git"
   },
   "bugs": {
-    "url": "https://github.com/wibus-wee/interactive-film/issues"
+    "url": "https://github.com/wibus-wee/cuelens/issues"
   },
-  "homepage": "https://github.com/wibus-wee/interactive-film#readme",
+  "homepage": "https://github.com/wibus-wee/cuelens#readme",
   "publishConfig": {
     "access": "public",
     "provenance": true

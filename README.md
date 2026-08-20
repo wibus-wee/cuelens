@@ -1,9 +1,10 @@
-# `@wibus/interactive-film`
+# Cuelens
 
-[![CI](https://github.com/wibus-wee/interactive-film/actions/workflows/ci.yml/badge.svg)](https://github.com/wibus-wee/interactive-film/actions/workflows/ci.yml)
+[![CI](https://github.com/wibus-wee/cuelens/actions/workflows/ci.yml/badge.svg)](https://github.com/wibus-wee/cuelens/actions/workflows/ci.yml)
 
-A typed runtime for interactive product films. One playhead drives numeric
-tracks, narrative beats, camera shots, and host-owned cues against real DOM UI.
+Cuelens (`@wibus/cuelens`) is a typed runtime for interactive product films. One
+playhead drives numeric tracks, narrative beats, camera shots, and host-owned
+cues against real DOM UI.
 
 The package is a director, not a scene renderer. Your application owns the
 product UI, fixtures, audio, cursor, commands, and navigation. The runtime owns
@@ -12,19 +13,19 @@ deterministic time, state derivation, cue replay rules, and camera framing.
 ## Install
 
 ```sh
-pnpm add @wibus/interactive-film
+pnpm add @wibus/cuelens
 ```
 
 React is a peer dependency. React hosts use the separate React entry:
 
 ```sh
-pnpm add react @wibus/interactive-film
+pnpm add react @wibus/cuelens
 ```
 
 **AI install prompt:**
 
 ```
-Install @wibus/interactive-film in this project, then read node_modules/@wibus/interactive-film/install.md and node_modules/@wibus/interactive-film/dist/docs/usage.md before integrating the appropriate runtime mode into the existing UI.
+Install @wibus/cuelens in this project, then read node_modules/@wibus/cuelens/install.md and node_modules/@wibus/cuelens/dist/docs/usage.md before integrating the appropriate runtime mode into the existing UI.
 ```
 
 ## Choose a mode
@@ -38,14 +39,14 @@ Install @wibus/interactive-film in this project, then read node_modules/@wibus/i
 ## Minimal automatic film
 
 ```tsx
-import { defineFilm, filmAnchorProps } from '@wibus/interactive-film';
+import { defineFilm, filmAnchorProps } from '@wibus/cuelens';
 import {
   FilmProvider,
   useFilmCamera,
   useFilmClock,
   useFilmClockSnapshot,
   useFilmFrame,
-} from '@wibus/interactive-film/react';
+} from '@wibus/cuelens/react';
 import { useRef } from 'react';
 
 const film = defineFilm({
@@ -104,22 +105,22 @@ export function Demo() {
 
 ## Documentation
 
-| Document                                                                         | Purpose                                                                                                       |
-| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| [`install.md`](install.md)                                                       | Installation workflow for developers and coding agents.                                                       |
-| [`docs/usage.md`](docs/usage.md)                                                 | Authoritative installation, automatic and step modes, camera lifecycle, cues, performance, and testing guide. |
-| [`docs/architecture/interactive-film.md`](docs/architecture/interactive-film.md) | Runtime boundaries, data flow, camera design, and future Creator architecture.                                |
-| [`playground/`](playground/)                                                     | Independent Vite app for guided shots, timeline playback, JSON authoring, and camera diagnostics.             |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md)                                             | Local setup, project boundaries, tests, and pull request expectations.                                        |
-| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)                                       | Community participation and enforcement standards.                                                            |
-| [`SECURITY.md`](SECURITY.md)                                                     | Supported releases and private vulnerability reporting.                                                       |
-| [`RELEASING.md`](RELEASING.md)                                                   | Maintainer-only npm and GitHub release procedure.                                                             |
+| Document                                                       | Purpose                                                                                                       |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| [`install.md`](install.md)                                     | Installation workflow for developers and coding agents.                                                       |
+| [`docs/usage.md`](docs/usage.md)                               | Authoritative installation, automatic and step modes, camera lifecycle, cues, performance, and testing guide. |
+| [`docs/architecture/cuelens.md`](docs/architecture/cuelens.md) | Runtime boundaries, data flow, camera design, and future Creator architecture.                                |
+| [`playground/`](playground/)                                   | Independent Vite app for guided shots, timeline playback, JSON authoring, and camera diagnostics.             |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md)                           | Local setup, project boundaries, tests, and pull request expectations.                                        |
+| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)                     | Community participation and enforcement standards.                                                            |
+| [`SECURITY.md`](SECURITY.md)                                   | Supported releases and private vulnerability reporting.                                                       |
+| [`RELEASING.md`](RELEASING.md)                                 | Maintainer-only npm and GitHub release procedure.                                                             |
 
 Published packages include this documentation under `dist/docs/`. An AI or
 developer inspecting an installed dependency should start at:
 
 ```text
-node_modules/@wibus/interactive-film/dist/docs/README.md
+node_modules/@wibus/cuelens/dist/docs/README.md
 ```
 
 The complete Usage guide has one source owner in `docs/usage.md`; this README is

@@ -1,6 +1,9 @@
 # Extract an interactive film toolkit without changing Lody onboarding
 
-This is the historical extraction plan. The runtime was subsequently moved to this standalone repository and renamed `@wibus/interactive-film`; `docs/exec-plans/20260729-02-standalone-repository.md` records that repository migration and its independent validation.
+This is the historical extraction plan. The runtime was subsequently moved to a
+standalone repository and is now published as `@wibus/cuelens` from
+`wibus-wee/cuelens`. The paths and intermediate package name below are retained
+as migration history.
 
 This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work proceeds. It follows `/Users/wibus/.agents/skills/execplan/references/PLANS.md`; that file is outside the repository, so the rules needed to continue are repeated here: keep this plan self-contained, record decisions and discoveries as they happen, name exact files and commands, and require observable behavior rather than compilation alone.
 

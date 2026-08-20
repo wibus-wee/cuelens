@@ -1,13 +1,13 @@
 # Usage
 
-This is the authoritative consumer guide for `@wibus/interactive-film`. It
+This is the authoritative consumer guide for `@wibus/cuelens`. It
 covers the public runtime and React adapter; product rendering and visual
 authoring remain host concerns.
 
 ## Install and imports
 
 ```sh
-pnpm add @wibus/interactive-film
+pnpm add @wibus/cuelens
 ```
 
 The root entry has no React dependency:
@@ -22,7 +22,7 @@ import {
   frameAt,
   validateFilm,
   validateFilmSteps,
-} from '@wibus/interactive-film';
+} from '@wibus/cuelens';
 ```
 
 React hosts install a compatible React version and import adapters separately:
@@ -39,7 +39,7 @@ import {
   useFilmFrame,
   useFilmStep,
   useFilmStepCamera,
-} from '@wibus/interactive-film/react';
+} from '@wibus/cuelens/react';
 ```
 
 ## Choose the control model
@@ -63,7 +63,7 @@ Tracks contain numeric keyframes. Beats select narrative content and the current
 camera shot. Cues identify imperative moments whose meaning belongs to the host.
 
 ```ts
-import { defineFilm, validateFilm } from '@wibus/interactive-film';
+import { defineFilm, validateFilm } from '@wibus/cuelens';
 
 export const tour = defineFilm({
   duration: 12,
@@ -135,7 +135,7 @@ Use it outside React or when reconstructing state after a seek.
 ## Mount the automatic React runtime
 
 ```tsx
-import { filmAnchorProps } from '@wibus/interactive-film';
+import { filmAnchorProps } from '@wibus/cuelens';
 import {
   FilmProvider,
   useFilmCamera,
@@ -143,7 +143,7 @@ import {
   useFilmClockSnapshot,
   useFilmCues,
   useFilmFrame,
-} from '@wibus/interactive-film/react';
+} from '@wibus/cuelens/react';
 import { useRef } from 'react';
 import { tour } from './tour';
 
@@ -227,8 +227,8 @@ object and does not itself subscribe.
 ## Drive host-controlled steps
 
 ```tsx
-import { defineFilmSteps, validateFilmSteps } from '@wibus/interactive-film';
-import { FilmStepProvider, useFilmStep, useFilmStepCamera } from '@wibus/interactive-film/react';
+import { defineFilmSteps, validateFilmSteps } from '@wibus/cuelens';
+import { FilmStepProvider, useFilmStep, useFilmStepCamera } from '@wibus/cuelens/react';
 import { useRef } from 'react';
 
 const onboarding = defineFilmSteps({
@@ -445,7 +445,7 @@ Inject a `FrameDriver` into `createFilmClock()` so tests control time without
 sleeping or depending on scheduler timing:
 
 ```ts
-import { createFilmClock, type FrameDriver } from '@wibus/interactive-film';
+import { createFilmClock, type FrameDriver } from '@wibus/cuelens';
 
 function createTestDriver() {
   let now = 0;
@@ -493,7 +493,7 @@ The published package contains the installation guide, this Usage guide, the
 documentation index, and architecture analysis under:
 
 ```text
-node_modules/@wibus/interactive-film/dist/docs/
+node_modules/@wibus/cuelens/dist/docs/
 ```
 
 Coding agents should begin with `dist/docs/README.md`, then read this Usage guide

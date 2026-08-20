@@ -1,7 +1,7 @@
-# Interactive Film Architecture
+# Cuelens architecture
 
 This document describes the current architecture of
-`@wibus/interactive-film`, the constraints that keep it reusable, and the
+`@wibus/cuelens`, the constraints that keep it reusable, and the
 intended shape of a future visual authoring tool.
 
 An interactive film is not a video file or a scene renderer. The host renders
@@ -22,7 +22,7 @@ a camera that frames host-owned DOM anchors.
 | Playground              | [`playground/`](../../playground/)                                                         | Exercise automatic, step, camera, validation, and authoring behavior against a fixture UI.      | The package's built public exports.                         |
 
 The root package entry is React-independent. React-specific behavior is exposed
-only through `@wibus/interactive-film/react`.
+only through `@wibus/cuelens/react`.
 
 ## Core model
 

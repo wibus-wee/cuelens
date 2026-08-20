@@ -31,7 +31,7 @@ const required = [
   'dist/docs/README.md',
   'dist/docs/install.md',
   'dist/docs/usage.md',
-  'dist/docs/architecture/interactive-film.md',
+  'dist/docs/architecture/cuelens.md',
 ];
 
 for (const path of required) {

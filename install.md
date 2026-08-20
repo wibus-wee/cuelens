@@ -1,6 +1,6 @@
-# Install Interactive Film
+# Install Cuelens
 
-Use this guide to add `@wibus/interactive-film` to an existing application. The
+Use this guide to add `@wibus/cuelens` to an existing application. The
 package supplies timing, state derivation, cue semantics, and camera framing; it
 does not replace the application's UI.
 
@@ -8,11 +8,11 @@ does not replace the application's UI.
 
 1. Inspect the repository's package manager, React version, application entry
    points, test commands, and local contributor instructions.
-2. Install `@wibus/interactive-film` with the existing package manager. Do not
+2. Install `@wibus/cuelens` with the existing package manager. Do not
    create a second lockfile or convert the repository into a workspace.
 3. If the integration uses React, confirm that the host already provides React
    `>=18.3.1`. React is a peer dependency and must not be bundled twice.
-4. Read `node_modules/@wibus/interactive-film/dist/docs/usage.md` and the
+4. Read `node_modules/@wibus/cuelens/dist/docs/usage.md` and the
    package's emitted TypeScript declarations before editing application code.
 5. Choose exactly one control model for the flow: automatic timeline or
    host-controlled steps.
@@ -27,23 +27,23 @@ does not replace the application's UI.
 Use the command that matches the existing repository:
 
 ```sh
-pnpm add @wibus/interactive-film
+pnpm add @wibus/cuelens
 ```
 
 ```sh
-npm install @wibus/interactive-film
+npm install @wibus/cuelens
 ```
 
 ```sh
-yarn add @wibus/interactive-film
+yarn add @wibus/cuelens
 ```
 
 ```sh
-bun add @wibus/interactive-film
+bun add @wibus/cuelens
 ```
 
 Do not run more than one package manager. If the host does not use React, import
-only from `@wibus/interactive-film`.
+only from `@wibus/cuelens`.
 
 ## Choose a runtime mode
 
@@ -51,7 +51,7 @@ only from `@wibus/interactive-film`.
 | ----------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------- |
 | Time controls playback, tracks, narration, shots, and cues.             | Automatic timeline    | `defineFilm()`, `FilmProvider`, `useFilmFrame()`, `useFilmCamera()`             |
 | A wizard, form, router, or async workflow controls progression.         | Host-controlled steps | `defineFilmSteps()`, `FilmStepProvider`, `useFilmStep()`, `useFilmStepCamera()` |
-| A non-React host needs clock, cue, interpolation, or camera primitives. | Core only             | `@wibus/interactive-film`                                                       |
+| A non-React host needs clock, cue, interpolation, or camera primitives. | Core only             | `@wibus/cuelens`                                                                |
 
 Do not mount an automatic clock and a step controller to own the same flow.
 
@@ -79,7 +79,7 @@ Confirm that the package resolves through the host toolchain, then run the
 repository's existing checks. A direct core import can be used as a smoke test:
 
 ```ts
-import { defineFilm, frameAt } from '@wibus/interactive-film';
+import { defineFilm, frameAt } from '@wibus/cuelens';
 
 const film = defineFilm({
   duration: 1,

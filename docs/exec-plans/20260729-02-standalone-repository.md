@@ -1,5 +1,9 @@
 # Move interactive-film into a standalone wibus repository
 
+This is a historical migration record. The current package is `@wibus/cuelens`
+and its repository is `wibus-wee/cuelens`; the former names and paths below
+describe the state at the time of extraction.
+
 This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept current while work proceeds. It follows `/Users/wibus/.agents/skills/execplan/references/PLANS.md`; the essential rules are repeated here: the plan must remain self-contained, use exact paths and commands, explain decisions in plain language, and prove behavior rather than merely listing files.
 
 ## Purpose / Big Picture

@@ -29,7 +29,7 @@ import {
   type CameraShot,
   type FilmValidationIssue,
   type Rect,
-} from '@wibus/interactive-film';
+} from '@wibus/cuelens';
 import {
   FilmAnchor,
   FilmProvider,
@@ -38,7 +38,7 @@ import {
   useFilmClockSnapshot,
   useFilmCues,
   useFilmFrame,
-} from '@wibus/interactive-film/react';
+} from '@wibus/cuelens/react';
 import './studio.css';
 
 const STUDIO_VIEWPORT = { width: 760, height: 480 };

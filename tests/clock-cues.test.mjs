@@ -27,7 +27,7 @@ class FakeFrameDriver {
   }
 }
 
-describe('interactive film clock', () => {
+describe('Cuelens clock', () => {
   it('plays, pauses, seeks, changes rate, and completes deterministically', () => {
     const driver = new FakeFrameDriver();
     let completions = 0;
@@ -71,7 +71,7 @@ describe('interactive film clock', () => {
   });
 });
 
-describe('interactive film cues', () => {
+describe('Cuelens cues', () => {
   it('fires on natural crossings, stays silent on forward seek, and rearms on rewind', () => {
     const driver = new FakeFrameDriver();
     const clock = createFilmClock({ duration: 1, autoPlay: false, driver });

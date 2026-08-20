@@ -1,6 +1,6 @@
-# Interactive Film Playground
+# Cuelens Playground
 
-An independent Vite and React application for exercising the package's camera runtime against a fixture-backed product surface. It is a nested folder, not a pnpm workspace member, and it owns its package manifest, lockfile, dependencies, build, and browser tests.
+An independent Vite and React application for exercising Cuelens against a fixture-backed product surface. It is a nested folder, not a pnpm workspace member, and it owns its package manifest, lockfile, dependencies, build, and browser tests.
 
 ## Surface map
 

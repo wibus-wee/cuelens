@@ -5,13 +5,13 @@ version tag. Do not publish routine releases directly from a workstation.
 
 ## One-time repository setup
 
-1. Make `wibus-wee/interactive-film` public and add a repository description and
+1. Make `wibus-wee/cuelens` public and add a repository description and
    topics.
 2. Enable private vulnerability reporting in **Settings > Security**.
 3. Create a GitHub environment named `npm`. Add required reviewers if releases
    should require manual approval.
 4. Confirm that the npm account or organization owning the `@wibus` scope may
-   create the public `@wibus/interactive-film` package.
+   create the public `@wibus/cuelens` package.
 5. Protect `main` and require the `Package / Node 22`, `Package / Node 24`, and
    `Playground / Chromium` checks.
 
@@ -21,7 +21,7 @@ access token that can create packages in the `@wibus` scope and add it as the
 publish:
 
 1. Configure npm Trusted Publishing for GitHub Actions with owner `wibus-wee`,
-   repository `interactive-film`, workflow filename `release.yml`, and
+   repository `cuelens`, workflow filename `release.yml`, and
    environment `npm`.
 2. Delete the `NPM_TOKEN` environment secret.
 
@@ -55,6 +55,20 @@ publishes npm provenance.
 6. Commit and merge the version and changelog update into `main`.
 
 ## Publish
+
+For the first release, a maintainer may publish from an authenticated local
+workstation. Local npm cannot produce GitHub Actions provenance, so disable it
+for this one command:
+
+```sh
+npm login
+npm whoami
+npm publish --access public --provenance=false
+```
+
+Then create and push the annotated tag below. The release workflow detects the
+existing npm version, skips duplicate publication, and creates the GitHub
+Release.
 
 Create and push an annotated tag from the release commit:
 

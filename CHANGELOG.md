@@ -8,6 +8,7 @@ series.
 
 ### Added
 
+- Cuelens package identity under `@wibus/cuelens`.
 - Typed automatic films with numeric tracks, narrative beats, camera shots, and
   host-owned cues.
 - Host-controlled step films for onboarding, forms, and wizard flows.
