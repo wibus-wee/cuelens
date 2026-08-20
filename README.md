@@ -1,10 +1,11 @@
 # `@wibus/interactive-film`
 
-A standalone runtime for interactive product films: one playhead drives numeric animation tracks, narration beats, camera shots, and imperative cues against host-owned UI.
+A typed runtime for interactive product films. One playhead drives numeric
+tracks, narrative beats, camera shots, and host-owned cues against real DOM UI.
 
-The package is intentionally not a scene renderer. Your application renders the real product surface (or a fixture-backed version of it); this package supplies deterministic time, state derivation, cue semantics, and DOM framing.
-
-This repository is independent from Lody. Lody supplied the original production case study, but the runtime has its own toolchain, tests, build output, and package boundary.
+The package is a director, not a scene renderer. Your application owns the
+product UI, fixtures, audio, cursor, commands, and navigation. The runtime owns
+deterministic time, state derivation, cue replay rules, and camera framing.
 
 ## Install
 
@@ -12,129 +13,70 @@ This repository is independent from Lody. Lody supplied the original production 
 pnpm add @wibus/interactive-film
 ```
 
-React hosts import the optional `@wibus/interactive-film/react` entry and provide their own compatible React installation.
+React is a peer dependency. React hosts use the separate React entry:
 
-## Package boundaries
-
-The root export has no React dependency:
-
-- typed film definitions;
-- numeric keyframe interpolation;
-- definition validation;
-- an external-store playback clock;
-- cue crossing and replay behavior;
-- camera geometry, spring physics, DOM anchor measurement, and transform application.
-
-`@wibus/interactive-film/react` adds:
-
-- `FilmProvider`;
-- `useFilmClock()` and `useFilmClockSnapshot()`;
-- `useFilmFrame()`;
-- `useFilmCues()`;
-- `useFilmCamera()`;
-- `FilmStepProvider`, `useFilmStep()`, and `useFilmStepCamera()` for semi-automatic hosts;
-- `FilmAnchor`.
-
-Audio, localization, product fixtures, Electron windows, cursor artwork, and the meaning of a cue stay in the host. That keeps the runtime useful outside Lody.
-
-## Define a film
-
-```ts
-import { defineFilm } from '@wibus/interactive-film';
-
-export const tour = defineFilm({
-  duration: 12,
-  tracks: {
-    rows: [
-      { time: 0, value: 1 },
-      { time: 4, value: 4, easing: 'easeOutCubic' },
-    ],
-    panel: [
-      { time: 0, value: 0 },
-      { time: 7, value: 0 },
-      { time: 8, value: 1, easing: 'easeInOutCubic' },
-    ],
-  },
-  beats: [
-    {
-      id: 'desk',
-      at: 0,
-      title: 'The whole workspace',
-      shot: { anchor: 'window', padding: 64, minScale: 0.3 },
-    },
-    {
-      id: 'run',
-      at: 3,
-      title: 'A task starts here',
-      shot: { anchor: 'composer', padding: 180, maxScale: 1.6 },
-    },
-    {
-      id: 'inspect',
-      at: 7,
-      title: 'Inspect the result in place',
-      shot: { anchor: 'side-panel', padding: 80, maxScale: 1.8 },
-    },
-  ],
-  cues: [
-    { id: 'send', at: 4.2, anchor: 'send-button', lead: 0.8, kind: 'click' },
-    {
-      id: 'open-panel',
-      at: 7.4,
-      anchor: 'changes-tab',
-      lead: 0.7,
-      kind: 'click',
-    },
-  ],
-});
+```sh
+pnpm add react @wibus/interactive-film
 ```
 
-`defineFilm()` preserves literal track, beat, cue, and anchor names for TypeScript. Run `validateFilm(tour)` in tests or in an authoring tool before playback.
+## Choose a mode
 
-## Mount the React runtime
+| Mode                  | Use it when                                                       | Main API                                                                        |
+| --------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Automatic timeline    | Playback, seeking, tracks, beats, and cues follow one clock.      | `defineFilm()`, `FilmProvider`, `useFilmFrame()`, `useFilmCamera()`             |
+| Host-controlled steps | A wizard, form, or onboarding flow decides when the shot changes. | `defineFilmSteps()`, `FilmStepProvider`, `useFilmStep()`, `useFilmStepCamera()` |
+| Core only             | A non-React host needs timing, cue, or camera primitives.         | Root export only                                                                |
+
+## Minimal automatic film
 
 ```tsx
-import { useMemo, useRef } from 'react';
-import { frameAt } from '@wibus/interactive-film';
+import { defineFilm, filmAnchorProps } from '@wibus/interactive-film';
 import {
   FilmProvider,
   useFilmCamera,
   useFilmClock,
   useFilmClockSnapshot,
-  useFilmCues,
+  useFilmFrame,
 } from '@wibus/interactive-film/react';
-import { tour } from './tour';
+import { useRef } from 'react';
 
-export function ProductFilm() {
-  return (
-    <FilmProvider definition={tour} onComplete={() => console.log('finished')}>
-      <FilmStage />
-    </FilmProvider>
-  );
-}
+const film = defineFilm({
+  duration: 8,
+  tracks: {
+    rows: [
+      { time: 0, value: 1 },
+      { time: 5, value: 4, easing: 'easeOutCubic' },
+    ],
+  },
+  beats: [
+    { id: 'wide', at: 0, title: 'Workspace', shot: { anchor: 'window' } },
+    { id: 'write', at: 3, title: 'Composer', shot: { anchor: 'composer', maxScale: 1.5 } },
+  ],
+  cues: [{ id: 'send', at: 5.5, anchor: 'send', kind: 'press' }],
+});
 
-function FilmStage() {
+function Stage() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const clock = useFilmClock();
   const snapshot = useFilmClockSnapshot();
-  const frame = useMemo(() => frameAt(tour, snapshot.time), [snapshot.time]);
+  const frame = useFilmFrame();
 
-  useFilmCamera({ viewportRef, stageRef });
-  useFilmCues({
-    onCue: (cue) => {
-      // The host decides whether this dispatches a real click, calls an app
-      // command, plays Foley, or only points at the target.
-      console.log('cue', cue.id);
-    },
+  useFilmCamera({
+    viewportRef,
+    stageRef,
+    fallbackRect: { x: 0, y: 0, width: 1600, height: 1000 },
+    hideUntilReady: true,
   });
 
   return (
-    <div ref={viewportRef} style={{ position: 'absolute', inset: 0, overflow: 'clip' }}>
-      <div ref={stageRef} style={{ width: 1800, height: 1100 }}>
-        <RealProductFixture
-          visibleRows={Math.floor(frame.values.rows)}
-          panelOpen={frame.values.panel > 0.02}
-        />
+    <div ref={viewportRef} style={{ position: 'relative', overflow: 'clip' }}>
+      <div ref={stageRef} style={{ width: 1600, height: 1000 }}>
+        <main {...filmAnchorProps('window')}>
+          <textarea {...filmAnchorProps('composer')} />
+          <button {...filmAnchorProps('send')}>Send</button>
+          <output>{Math.floor(frame.values.rows)} rows</output>
+        </main>
       </div>
       <button onClick={snapshot.playing ? clock.pause : clock.play}>
         {snapshot.playing ? 'Pause' : 'Play'}
@@ -142,110 +84,50 @@ function FilmStage() {
     </div>
   );
 }
-```
 
-Mark existing product nodes without wrapping them:
-
-```tsx
-import { filmAnchorProps } from '@wibus/interactive-film';
-
-<section {...filmAnchorProps('composer')}>...</section>;
-```
-
-Use `FilmAnchor` only when a wrapper `div` is semantically harmless.
-
-## Drive a film from host steps
-
-Use steps when the host owns the flow, such as an onboarding wizard. Each step
-can carry host-owned state and an optional camera shot. The controller changes
-only when the host calls `next()`, `previous()`, `goTo()`, or `reset()`; it does
-not create a second playhead and it does not dispatch product actions.
-
-```tsx
-import { useRef } from 'react';
-import { defineFilmSteps } from '@wibus/interactive-film';
-import { FilmStepProvider, useFilmStep, useFilmStepCamera } from '@wibus/interactive-film/react';
-
-const onboarding = defineFilmSteps({
-  steps: [
-    { id: 'welcome', state: { mode: 'welcome' }, shot: { anchor: 'window' } },
-    {
-      id: 'composer',
-      state: { mode: 'composer' },
-      shot: { anchor: 'composer', zoom: 1.4, focusX: 0.42, focusY: 0.5 },
-    },
-  ],
-});
-
-function OnboardingStage() {
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
-  const step = useFilmStep();
-
-  useFilmStepCamera({ viewportRef, stageRef });
-
+export function Demo() {
   return (
-    <div ref={viewportRef}>
-      <div ref={stageRef}>
-        <ProductFixture state={step.step.state} />
-      </div>
-      <button onClick={step.previous}>Back</button>
-      <button onClick={step.next}>Continue</button>
-    </div>
-  );
-}
-
-export function OnboardingFilm() {
-  return (
-    <FilmStepProvider definition={onboarding} initialStep="welcome">
-      <OnboardingStage />
-    </FilmStepProvider>
+    <FilmProvider definition={film} autoPlay={false}>
+      <Stage />
+    </FilmProvider>
   );
 }
 ```
 
-The original `FilmProvider` and `useFilmCamera()` remain the fully automatic
-playhead mode. Both modes share camera anchor measurement and spring physics;
-only the source of the current shot changes.
+## Documentation
 
-## Playback and cue rules
+| Document                                                                                               | Purpose                                                                                                       |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| [`docs/usage.md`](docs/usage.md)                                                                       | Authoritative installation, automatic and step modes, camera lifecycle, cues, performance, and testing guide. |
+| [`docs/architecture/interactive-onboarding-film.md`](docs/architecture/interactive-onboarding-film.md) | Lody case study, runtime design decisions, and future Creator design.                                         |
+| [`playground/`](playground/)                                                                           | Independent Vite app for guided shots, timeline playback, JSON authoring, and camera diagnostics.             |
 
-- Natural playback fires a cue once when the playhead crosses it.
-- Forward seek does not fire crossed cues. The host must reconstruct visible state from `frameAt()`.
-- Backward seek re-arms cues after the destination so replaying that section behaves normally.
-- Restart re-arms every cue.
-- Looping fires end-of-film cues before start-of-film cues.
-- The clock accepts an injected `FrameDriver`, so tests never need real sleeps.
+Published packages include this documentation under `dist/docs/`. An AI or
+developer inspecting an installed dependency should start at:
 
-These rules matter because a scrubber is not a very fast user. Seeking across five cue points must not click five real controls or play five sounds in a burst.
+```text
+node_modules/@wibus/interactive-film/dist/docs/README.md
+```
 
-## Rendering budget
+The complete Usage guide has one source owner in `docs/usage.md`; this README is
+only the package entry point and quick start.
 
-`useFilmFrame()` updates on each clock tick. Keep it in a small conductor and quantize values before passing them into a large product tree. Prefer:
+## Playground
 
-- direct DOM transforms for camera and cursor motion;
-- CSS transitions for compositor-friendly entrances;
-- integers or coarse thresholds for list membership and panel presence;
-- refs for typewriter text or other fine-grained writes;
-- one persistent expensive canvas/WebGL instance rather than one per scene.
+The playground has its own package manifest and lockfile, so this repository is
+not a monorepo.
 
-The package's `useFilmCamera()` already follows this rule: it reads the clock imperatively and writes only the stage transform, so the camera can settle while story time is paused without re-rendering React at 60 fps.
+```sh
+cd playground
+pnpm install
+pnpm dev
+```
 
-## What is deliberately not included
+Open `http://127.0.0.1:4173/`. Guided mode exercises host-owned steps, Timeline
+mode exercises the automatic runtime, and Studio combines CodeMirror JSON with
+visual tracks, keyframes, beats, shots, cues, validation, and live preview.
 
-- A visual editor or recorder.
-- A built-in fake product UI.
-- Synthetic click dispatch. A host should explicitly decide which cues may operate real controls.
-- A ghost cursor renderer.
-- Music or sound effects.
-- JSON schema/version migration tooling.
-- Electron or native window lifecycle.
-
-Those are adapters or creator features. The detailed extraction and creator design lives in `docs/architecture/interactive-onboarding-film.md`.
-
-## Verification
-
-From the repository root:
+## Verify a release
 
 ```sh
 pnpm install
@@ -253,4 +135,6 @@ pnpm check
 pnpm pack
 ```
 
-`pnpm check` type-checks source, runs the deterministic suite, builds publishable ESM and declaration files into `dist/`, and verifies formatting. `pnpm pack` runs the build again and prints the exact npm tarball contents; generated `.tgz` files are ignored by Git. The tests use Node's built-in runner and a fake frame driver. They cover interpolation, validation, frame derivation, playback, pause/seek/rate/loop behavior, cue replay rules, and camera geometry/physics.
+`pnpm build` emits ESM, declarations, source maps, and a copy of the complete
+`docs/` tree at `dist/docs/`. `pnpm pack` runs that build again and creates the
+same file set npm will publish.

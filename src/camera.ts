@@ -38,6 +38,15 @@ export type AnchorResolver<Anchor extends string = string> = (
 
 export const DEFAULT_CAMERA_PADDING = 56;
 export const DEFAULT_CAMERA_MAX_SCALE = 2.6;
+export const MIN_CAMERA_SCALE = 0.0001;
+
+function finiteOr(value: number | undefined, fallback: number): number {
+  return value === undefined || !Number.isFinite(value) ? fallback : value;
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value));
+}
 
 export function filmAnchorProps<Anchor extends string>(
   anchor: Anchor
@@ -82,31 +91,35 @@ export function solveCameraPose(
   viewport: ViewportSize,
   shot: Pick<CameraShot, 'padding' | 'minScale' | 'maxScale' | 'zoom' | 'focusX' | 'focusY'> = {}
 ): CameraPose {
-  const padding = shot.padding ?? DEFAULT_CAMERA_PADDING;
-  const availableWidth = Math.max(1, viewport.width - padding * 2);
-  const availableHeight = Math.max(1, viewport.height - padding * 2);
-  const fitScale = Math.min(availableWidth / rect.width, availableHeight / rect.height);
-  const zoom = Math.max(0.1, shot.zoom ?? 1);
-  const scale = Math.min(
-    shot.maxScale ?? DEFAULT_CAMERA_MAX_SCALE,
-    Math.max(shot.minScale ?? 0, fitScale * zoom)
-  );
-  const centreX = rect.x + rect.width / 2;
-  const centreY = rect.y + rect.height / 2;
-  const focusX = Math.min(1, Math.max(0, shot.focusX ?? 0.5));
-  const focusY = Math.min(1, Math.max(0, shot.focusY ?? 0.5));
+  const viewportWidth = Math.max(1, finiteOr(viewport.width, 1));
+  const viewportHeight = Math.max(1, finiteOr(viewport.height, 1));
+  const subjectWidth = Math.max(1, finiteOr(rect.width, 1));
+  const subjectHeight = Math.max(1, finiteOr(rect.height, 1));
+  const padding = Math.max(0, finiteOr(shot.padding, DEFAULT_CAMERA_PADDING));
+  const availableWidth = Math.max(1, viewportWidth - padding * 2);
+  const availableHeight = Math.max(1, viewportHeight - padding * 2);
+  const fitScale = Math.min(availableWidth / subjectWidth, availableHeight / subjectHeight);
+  const zoom = Math.max(0.1, finiteOr(shot.zoom, 1));
+  const minScale = Math.max(MIN_CAMERA_SCALE, finiteOr(shot.minScale, MIN_CAMERA_SCALE));
+  const maxScale = Math.max(MIN_CAMERA_SCALE, finiteOr(shot.maxScale, DEFAULT_CAMERA_MAX_SCALE));
+  const scale = Math.min(maxScale, Math.max(minScale, fitScale * zoom));
+  const centreX = finiteOr(rect.x, 0) + subjectWidth / 2;
+  const centreY = finiteOr(rect.y, 0) + subjectHeight / 2;
+  const focusX = clamp(finiteOr(shot.focusX, 0.5), 0, 1);
+  const focusY = clamp(finiteOr(shot.focusY, 0.5), 0, 1);
   return {
     scale,
-    x: viewport.width * focusX - centreX * scale,
-    y: viewport.height * focusY - centreY * scale,
+    x: viewportWidth * focusX - centreX * scale,
+    y: viewportHeight * focusY - centreY * scale,
   };
 }
 
 export function cameraTargetFromPose(pose: CameraPose, viewport: ViewportSize): CameraTarget {
+  const scale = Math.max(MIN_CAMERA_SCALE, finiteOr(pose.scale, 1));
   return {
-    scale: pose.scale,
-    centreX: (viewport.width / 2 - pose.x) / pose.scale,
-    centreY: (viewport.height / 2 - pose.y) / pose.scale,
+    scale,
+    centreX: (finiteOr(viewport.width, 0) / 2 - finiteOr(pose.x, 0)) / scale,
+    centreY: (finiteOr(viewport.height, 0) / 2 - finiteOr(pose.y, 0)) / scale,
   };
 }
 
@@ -118,11 +131,12 @@ export function cameraPoseFromMotion(motion: CameraMotion, viewport: ViewportSiz
   };
 }
 
-export function createCameraMotion(): CameraMotion {
+/** Create an unpositioned camera, or park one exactly on an existing target. */
+export function createCameraMotion(target?: CameraTarget): CameraMotion {
   return {
-    scale: 0,
-    centreX: 0,
-    centreY: 0,
+    scale: target ? Math.max(MIN_CAMERA_SCALE, finiteOr(target.scale, 1)) : 0,
+    centreX: finiteOr(target?.centreX, 0),
+    centreY: finiteOr(target?.centreY, 0),
     velocity: { scale: 0, centreX: 0, centreY: 0 },
   };
 }
@@ -192,8 +206,8 @@ export function cameraAtRest(motion: CameraMotion, target: CameraTarget): boolea
   return (
     Math.abs(Math.log(motion.scale) - Math.log(target.scale)) < CAMERA_REST_EPSILON &&
     Math.abs(motion.velocity.scale) < CAMERA_REST_EPSILON &&
-    Math.abs(motion.centreX - target.centreX) < 0.5 &&
-    Math.abs(motion.centreY - target.centreY) < 0.5 &&
+    Math.abs(motion.centreX - target.centreX) < 0.05 &&
+    Math.abs(motion.centreY - target.centreY) < 0.05 &&
     Math.abs(motion.velocity.centreX) < 0.5 &&
     Math.abs(motion.velocity.centreY) < 0.5
   );

@@ -1,8 +1,19 @@
-# Lody 交互式 Onboarding Film：架构解析、抽包边界与 Creator 设计
+# Interactive Onboarding Film：当前接入、历史案例与 Creator 设计
 
-本文解释 Lody 当前那套“像视频一样有镜头、有节奏，但里面又是真 UI、可以暂停/跳转/点击”的 onboarding tour 到底如何工作；也说明哪些东西已经抽成了 `@wibus/interactive-film`，以及未来怎样把它做成一个快速创建此类体验的工具。
+本文说明 `@wibus/interactive-film` 的当前能力、它与 Lody 当前 onboarding 的对应关系，以及最初 continuous product tour 留下的设计经验。最后一部分描述未来怎样把 runtime 扩展成创建此类体验的工具。
 
-文中所说的 film 不是视频文件。它是一个由统一时间轴驱动的实时 React/DOM 场景：画面来自真实组件，镜头来自 DOM 测量，交互 cue 会落到真实控件，所有状态都可以由任意时间点重建。
+文中所说的 film 不是视频文件。画面来自 host 的真实 React/DOM 组件，镜头来自 DOM 测量。Automatic mode 由统一 playhead 驱动；step mode 则由 host 的表单或向导状态驱动，同一 camera core 服务两种模式。
+
+| 层                     | 当前状态                                                                                  | 代码所有者                                                                                                               |
+| ---------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Lody onboarding        | 主 renderer 的 `/onboarding` route；四段 illustrated ceremony 后进入 phase-driven setup。 | Lody `packages/components/src/components/onboarding/`                                                                    |
+| Lody product camera    | 持久 `OnboardingShellHost` 内的 `TourStill`；form state 决定真实产品 fixture 和 shot。    | Lody `onboarding-shell.tsx`、`tour/tour-still.tsx`、`tour/camera.ts`                                                     |
+| Package step mode      | `FilmStepProvider`、`useFilmStep()`、`useFilmStepCamera()` 对应当前向导式驱动。           | [`src/steps.ts`](../../src/steps.ts)、[`src/react.tsx`](../../src/react.tsx)                                             |
+| Package automatic mode | 保留最初 continuous tour 提炼出的 playhead、track、beat、cue 和 replay semantics。        | [`src/definition.ts`](../../src/definition.ts)、[`src/clock.ts`](../../src/clock.ts)、[`src/cues.ts`](../../src/cues.ts) |
+| Shared camera core     | DOM anchor、transform-aware measurement、fit framing、log-scale spring。                  | [`src/camera.ts`](../../src/camera.ts)                                                                                   |
+| Playground             | 独立 Vite app，验证 step、automatic camera 与 JSON authoring 的发布边界和视觉行为。       | [`playground/`](../../playground/)                                                                                       |
+
+第 1、2、7、8、9、10 节保留 continuous film 的设计模型，它们解释 package automatic mode 的来源，不代表这些旧 tour 文件仍存在于当前 Lody 分支。
 
 ## 1. 一句话模型
 
@@ -26,11 +37,11 @@
 
 最重要的不是“scene 数组”，而是所有东西都能回答同一个问题：在时间 `t`，它应该是什么状态。
 
-如果相机、文案、假 cursor、产品事件分别持有自己的 `setTimeout`，那么暂停、seek、replay、用户插手之后都无法重新对齐。Lody 旧实现吃过这个亏，现在主 tour 已经收敛到一个 playhead。
+如果相机、文案、假 cursor、产品事件分别持有自己的 `setTimeout`，那么暂停、seek、replay、用户插手之后都无法重新对齐。最初的 continuous tour 因此收敛到一个 playhead；这个约束现在由 package automatic mode 保留。
 
 ## 2. 四种时间数据
 
-Lody 的 tour script 在 `packages/components/src/components/onboarding/tour/tour-script.ts`。它把故事拆成四类概念。
+最初的 Lody tour script 把故事拆成四类概念。原文件已不在当前 Lody onboarding 中，这些概念现在由 package 的 definition、clock 和 cue modules 持有。
 
 ### 2.1 Track：时间到数值
 
@@ -93,7 +104,7 @@ Cue 是命令式事件：
 { at: 74.9, anchor: 'browser.target', lead: 0.6 }
 ```
 
-`lead` 表示 ghost cursor 提前多久开始移动；`at` 才是按下的时刻。Lody 当前 cue 会：
+`lead` 表示 ghost cursor 提前多久开始移动；`at` 才是按下的时刻。原 continuous tour 的 cue 会：
 
 - 打开真实 run-config menu；
 - 点击真实 permission allow；
@@ -116,78 +127,23 @@ Shot 不存手写 `x/y/scale`，只存“看哪个节点”和“留多少呼吸
 
 真实 pose 在运行时通过 DOM rect 和 viewport 求解。布局变了、panel 正在展开、sidebar 多了一行，镜头仍会追踪正确节点。
 
-## 3. 当前运行链路
+## 3. Lody 当前运行链路
 
-### 3.1 Electron 先准备一张不可见的原生画布
+### 3.1 一个 renderer，一条完成链路
 
-入口在：
+Electron 在主产品 renderer 内打开 `/onboarding`。`OnboardingOverlay` 根据 platform capability、持久 phase 和 draft 选择下一屏；完成标记由 Electron main process 持有，renderer 只保存可恢复的 phase 和表单草稿。Onboarding 不创建第二个 window、renderer tree 或 runtime lease。
 
-- `apps/electron/src/main/onboarding-window.ts`
-- `apps/electron/src/renderer/src/onboarding-entry.tsx`
-- `apps/electron/src/main/ipc/register-handlers.ts`
+### 3.2 Ceremony 与配置页使用不同驱动
 
-窗口不是 native fullscreen，而是一个铺满 display bounds 的透明、无边框 BrowserWindow。macOS 原生 fullscreen 会给窗口强制加不透明 backing store，破坏透明叠加效果，所以这里采用普通 borderless window，加 `screen-saver` always-on-top level 和 all-workspaces visibility。
+`ceremony/intro-sequence.tsx` 是四段 illustrated intro。前三段按 hold 时间推进，最后一段等待用户开始；图片、文案和音频 energy 使用离散 cut 与 CSS animation，不需要 continuous film playhead。
 
-窗口创建时：
+配置页由 host phase 驱动。`OnboardingShellHost` 在 login、workspace、providers、projects、first task 和 summary 之间保持 stage、产品窗口与 camera mounted。每个 screen 注册当前 copy、actions、fixture state 和可选 shot；camera 不拥有业务 navigation。
 
-```text
-show: false
-opacity: 0
-transparent: true
-```
+### 3.3 Form state 驱动同一台 camera
 
-Renderer 不依赖 `ready-to-show`。它在 React 完整 commit 后等待两个 animation frame，再调用 `lodyOnboarding:ready`。Main process 才把窗口以 opacity 0 attach 到 Window Server。Renderer 再等一帧，`flushSync` 提交 CSS opacity transition，然后调用 `lodyOnboarding:reveal`，main process 同步开始 native opacity 的 900ms fade。
+`onboarding-shell.tsx` 的 `STEP_FRAME` 为每个 phase 提供 anchor、padding、zoom 和 focus point。`TourStill` 投影当前 identity、agent、project 和 conversation state 到真实产品组件，再用 DOM anchor 求解 pose。
 
-时序是：
-
-```text
-create hidden native window
-        |
-load renderer + commit React
-        |
-wait 2 painted frames
-        |
-renderer --ready--> main: show at native opacity 0
-        |
-wait 1 compositor frame
-        |
-renderer: commit CSS reveal
-renderer --reveal--> main: start native reveal
-        |
-CSS opacity + BrowserWindow opacity progress together
-        |
-transitionend => entranceComplete=true
-        |
-intro timer / score / shader motion may start
-```
-
-这解决了最容易出现的白屏：不能先 `show()` 一个 Chromium 尚未真正画好的透明窗口，再期待 renderer 赶上。
-
-### 3.2 Intro 和主 Tour 不是同一种时间引擎
-
-Intro 位于 `ceremony/intro-sequence.tsx`。它只有五个离散 shot，一共只需要 render 五次，所以使用 `setTimeout` 切镜头和 CSS transition：
-
-- shader mascot 只 mount 一次；
-- shot 文案始终 mount，通过 in/out/pending 状态切换；
-- spring 被预采样成 CSS `linear()` easing；
-- 小面积文字短暂 blur；
-- 不用 React 60fps setState。
-
-这不是架构不一致，而是按问题选工具。离散的五次 cut 没必要上连续 timeline。
-
-主 Tour 位于 `tour/tour-stage.tsx`，要支持 pause、seek、镜头持续追踪、真实 cue，因此使用统一 playhead。
-
-### 3.3 入口半秒和内容时间分离
-
-主 tour 的 `useTimeline()` duration 是：
-
-```text
-TOUR_ENTRANCE_DURATION + TOUR_DURATION
-```
-
-`windowPresence` 在入口半秒从 0 到 1。所有内容消费者通过 `tourContentTimeAt(elapsed)` 看到的时间在这半秒内始终是 0。结果是窗口先出现，随后故事才开始，而不是内容已经跑起来、窗口还在透明。
-
-这个模式以后应该成为通用 definition 的 `preRoll` 或独立 entrance track，而不是让每个 consumer 自己减一个魔法数字。
+首个 pose 在 layout 阶段同步写入，stage 在此之前保持隐藏。后续 phase、form state 或 shot 变化沿用同一个 motion state，保留位置和速度；viewport resize 通过 `ResizeObserver` 重新触发测量。当前 Lody 没有 continuous cue、seek 或 ghost cursor，这些能力只存在于 package automatic mode。
 
 ## 4. 真实 UI，而不是重新画一个产品截图
 
@@ -222,28 +178,20 @@ TOUR_ENTRANCE_DURATION + TOUR_DURATION
 
 ## 5. Stage：为什么需要比窗口更大的世界
 
-`tour-stage.tsx` 定义一个 `2900 x 1560` 的 authored stage。主 Lody window 只是 stage 上的一件物体，旁边还可以放：
+当前 `TourStill` 的 authored product window 是 `1700 x 1080`。Camera viewport 铺满 onboarding stage；form 和 readability veil 是它上方的独立层。`focusX/focusY` 把 subject 放到 form 旁边的可读区域，而不是通过裁小 camera viewport 制造固定左右栏。
 
-- Studio 的第二个窗口；
-- 一部手机；
-- 动态 desk bounds。
-
-如果相机坐标系就是 app window，那么“另一台机器也在继续工作”和“手机里是同一份列表”永远只能出现在文案里。把窗口放到更大的 stage 后，镜头可以：
-
-- 拉远看整张 desk；
-- 推进主窗口内部的 composer；
-- 平移到第二台机器；
-- 回到主窗口；
-- 最后继续推进，直到 film 变成产品本身。
+Package 不规定 stage 尺寸。Host 可以只放一个产品窗口，也可以建立包含多个设备的更大世界；camera 始终在 stage 的未变换坐标系内工作。
 
 Viewport 必须用 `overflow: clip`，而不是 `overflow: hidden`。后者仍会创建 scroll container，巨大的 transformed stage 可能产生非零 scroll offset，导致计算正确的 camera pose 仍然被裁偏。
 
 ## 6. DOM Anchor Camera
 
-Camera 逻辑位于：
+Camera 逻辑分为：
 
-- `tour/camera.ts`：纯 geometry 和 spring；
-- `tour/use-tour-motion.ts`：每帧测量与 DOM 写入。
+- Lody `tour/camera.ts`：产品 selector、geometry 和 spring；
+- Lody `tour/tour-still.tsx`：首帧、每帧测量、DOM 写入和 resize lifecycle；
+- package [`src/camera.ts`](../../src/camera.ts)：中性的纯 camera core；
+- package [`src/react.tsx`](../../src/react.tsx)：automatic 与 step camera hooks。
 
 ### 6.1 Anchor resolution
 
@@ -328,21 +276,21 @@ focus(preventScroll)
 
 这是为了兼容不同产品控件各自监听的事件，而不是让 driver 知道每个组件内部如何实现。
 
-### 当前一个未完成的意图
+### 历史实现没有完成的 pointer arbitration
 
-`TourStage` 注释写明：用户真实点击时，film 不暂停，只让 ghost cursor 暂退几秒，并用 `event.isTrusted` 区分用户事件和脚本事件。但当前代码最终仍传入：
+原 `TourStage` 注释写明：用户真实点击时，film 不暂停，只让 ghost cursor 暂退几秒，并用 `event.isTrusted` 区分用户事件和脚本事件。但当时的代码最终仍传入：
 
 ```ts
 cursorEnabled: playing;
 ```
 
-没有实际维护“用户接管到期时间”。因此现状是 pause 会隐藏脚本 cursor，普通用户点击不会自动让它暂退。未来接入新 package 或做 creator runtime 时，应把它实现为显式的 pointer arbitration policy，而不是继续只留注释。
+它没有实际维护“用户接管到期时间”。旧 Lody source 已移除，package 也刻意不提供 ghost cursor；未来 creator runtime 若增加 cursor，必须先定义显式 pointer arbitration policy。
 
 ## 8. Seek、Replay 与状态重建
 
 交互 film 和视频最大的区别是：seek 到 80 秒时，不能只换一张图片；真实 UI 的 active tab、selected task、permission answer、PR state 都必须正确。
 
-Lody 当前采用双轨策略。
+原 continuous tour 采用双轨策略，这套规则随后进入 package automatic mode。
 
 ### 自然播放
 
@@ -429,50 +377,30 @@ seek 不重放所有跨过的 cue。否则从 0 拖到 80 秒会瞬间点击十�
 
 所有 `play*` 必须 fail-soft。Web Audio 被浏览器拒绝、context 未解锁或 API 不存在，都只能导致安静，不能让 click handler 抛异常后阻止按钮继续执行。
 
-主 tour 的 sound crossing 只在“自然、连续前进”时触发。seek 只播放 transport 自己的声音，不播放被跨过的所有 scene/cue sound。
+Automatic film host 的 sound crossing 只应在“自然、连续前进”时触发。seek 只播放 transport 自己的声音，不播放被跨过的所有 scene/cue sound。
 
 Web Audio autoplay policy 要求用户手势，所以 window 会监听一次 `pointerdown/keydown` 来 unlock。未来 runtime 可以提供 audio event channel，但不能把具体合成器放进通用 package。
 
-## 11. 现有文件职责图
+## 11. 当前文件职责图
 
 ```text
-Electron/native surface
-  apps/electron/src/main/onboarding-window.ts
-  apps/electron/src/main/ipc/register-handlers.ts
-  apps/electron/src/renderer/src/onboarding-entry.tsx
+Lody desktop ownership
+  routes/onboarding.tsx                   completion IPC + product navigation
+  onboarding-overlay.tsx                 phase resolution + draft projection
+  onboarding-shell.tsx                   persistent form/product composition
+  ceremony/intro-sequence.tsx             four illustrated intro beats
+  tour/tour-still.tsx                     step-driven camera lifecycle
+  tour/camera.ts                          Lody anchor resolver + camera core
+  tour/tour-app.tsx                       real product component composition
+  tour/tour-fixtures.ts                   deterministic host adapters
+  tour/tour-browser-preview.tsx           browser preview fixture
 
-Flow shell
-  packages/components/src/components/onboarding/onboarding-overlay.tsx
-  packages/components/src/components/onboarding/ceremony/ceremony.tsx
-
-Discrete brand intro
-  ceremony/intro-sequence.tsx
-  ceremony/gem-smoke-mark.tsx
-  ceremony/aurora-background.tsx
-
-Continuous product film
-  tour/tour-script.ts          tracks + beats + cues
-  tour/tour-stage.tsx         conductor + state projection + transport + sound
-  tour/use-tour-motion.ts     camera + cursor + cue crossing
-  tour/camera.ts              anchor resolver + geometry + spring
-  tour/ghost-cursor.tsx       cursor artwork only
-
-Host-owned product world
-  tour/tour-app.tsx           real product component composition
-  tour/tour-fixtures.ts       deterministic data/provider adapters
-  tour/tour-satellites.tsx   second machine + phone
-  tour/tour-browser-preview.tsx
-  tour/tour-still.tsx         static framing reuse
-
-Sound
-  ceremony/use-onboarding-audio.ts
-  ceremony/ui-sounds.ts
-
-Generic motion substrate currently buried in components
-  packages/components/src/lib/motion/timeline.ts
-  packages/components/src/lib/motion/use-timeline.ts
-  packages/components/src/lib/motion/clock.ts
-  packages/components/src/lib/motion/spring.ts
+Standalone package ownership
+  src/definition.ts                       automatic film data + frame derivation
+  src/clock.ts / src/cues.ts              playhead + replay semantics
+  src/steps.ts                            host-controlled step navigation
+  src/camera.ts                           product-neutral camera core
+  src/react.tsx                           automatic + step React adapters
 ```
 
 ## 12. 已抽出的 `@wibus/interactive-film`
@@ -501,9 +429,12 @@ src/index.ts        dependency-free exports
 - `useFilmFrame`；
 - `useFilmCues`；
 - `useFilmCamera`；
+- `FilmStepProvider`、`useFilmStep`、`useFilmStepCamera`；
 - `FilmAnchor`。
 
-Clock 是 external store，React 用 `useSyncExternalStore` 订阅。Camera hook 不订阅 React frame state，而是在自己的 rAF 中调用 `clock.getSnapshot()` 并直接写 stage transform，所以 pause 时 camera 仍可 settle。
+Clock 与 step controller 都是 external store，React 用 `useSyncExternalStore` 做窄订阅。Camera hook 不通过 React state 写逐帧 pose，而是同步组合首个 pose，之后在自己的 rAF 中直接写 stage transform，所以 pause 时 camera 仍可 settle。
+
+Camera hooks 保留 motion 跨 render 连续性，观察 viewport、stage、anchor 和 DOM 变化，支持 anchor 未出现时的 `fallbackRect`，并可用 `hideUntilReady` 避免首帧闪出未定位 stage。缺失 anchor 的 paused step 不会持续空转 rAF；相关 DOM 或 resize 变化会重新唤醒测量。
 
 ### 为什么 package 没有这些东西
 
@@ -552,6 +483,8 @@ useFilmCues({ onCue: executeAllowedCue });
 ## 14. 未来 Creator 应该是什么
 
 目标不是生成 React animation code，而是生成可校验的 film definition 和少量 adapter skeleton。
+
+当前 Playground 的 Studio mode 是这条路线的可运行前置验证：CodeMirror 持有 JSON 草稿，结构检查与 package validator 共同阻止无效 definition 替换 live runtime；同一画面展示 frame values、easing curves、cue crossing、camera resolver 和 fallback geometry。它验证 authoring 数据流，但没有项目持久化、schema migration、command history、host iframe 或 compiler，因此仍不是可发布的 Creator。
 
 ### 14.1 Creator 的五层架构
 
@@ -806,18 +739,21 @@ Creator 的价值应该是快速搭好导演系统，而不是让所有产品都
 - fit-not-crop camera；
 - log-scale spring；
 - React provider/hooks/camera adapter；
-- 12 个无真实时间依赖的测试。
+- synchronous first camera pose、fallback framing 和 exact settle；
+- resize/DOM-driven camera wake-up；
+- Playground Studio 的 JSON 编辑、双层校验和 live runtime preview；
+- 19 个无真实时间依赖的测试。
 
 尚未实现：
 
-- visual creator；
+- 可发布的 visual creator；
 - CLI/compiler；
 - schema migration；
 - recorder；
 - ghost cursor generic component；
 - built-in synthetic press executor；
 - audio event bus；
-- screenshot harness；
+- Creator-generated screenshot checkpoint harness；
 - Lody 现有 tour 的迁移 adapter。
 
 这些限制是刻意边界，不是隐藏的“马上就会有”。下一步最合理的验证不是立刻迁移 Lody，而是用 package 从零做第二个 20-30 秒的小 film。只有第二个作品能证明抽象是否真的通用。

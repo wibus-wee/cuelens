@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -24,6 +25,8 @@ import {
   stepCamera,
   type CameraShot,
   type AnchorResolver,
+  type CameraPose,
+  type Rect,
 } from './camera.ts';
 import { createFilmClock, type FilmClock, type FilmClockSnapshot } from './clock.ts';
 import { createCueController } from './cues.ts';
@@ -35,6 +38,7 @@ import {
   type FilmStepSelector,
   type FilmStepSnapshot,
 } from './steps.ts';
+import { createDeferredEffectLifetime } from './react-lifecycle.ts';
 
 type FilmContextValue = {
   clock: FilmClock;
@@ -78,11 +82,13 @@ export function FilmProvider({
         })
   );
   const clock = externalClock ?? ownedClock!;
+  const [ownedClockLifetime] = useState(() =>
+    ownedClock ? createDeferredEffectLifetime(ownedClock.destroy) : null
+  );
 
   useEffect(() => {
-    if (!ownedClock) return undefined;
-    return () => ownedClock.destroy();
-  }, [ownedClock]);
+    return ownedClockLifetime?.acquire();
+  }, [ownedClockLifetime]);
 
   return <FilmContext.Provider value={{ clock, definition }}>{children}</FilmContext.Provider>;
 }
@@ -140,6 +146,7 @@ type FilmStepContextValue = {
 };
 
 const FilmStepContext = createContext<FilmStepContextValue | null>(null);
+const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 export type FilmStepProviderProps = {
   definition: AnyFilmStepDefinition;
@@ -196,11 +203,23 @@ export function useFilmStep(): FilmStepSnapshot &
   };
 }
 
-export type UseFilmCameraOptions<Anchor extends string = string> = {
-  viewportRef: RefObject<HTMLElement | null>;
-  stageRef: RefObject<HTMLElement | null>;
+export type FilmCameraFallback = Rect | ((stage: HTMLElement) => Rect | null);
+
+type FilmCameraRuntimeOptions<Anchor extends string> = {
   resolveAnchor?: AnchorResolver<Anchor>;
+  /** Frame this authored rect while the live anchor is absent or has no layout box. */
+  fallbackRect?: FilmCameraFallback;
+  /** Keep the stage hidden until its first camera transform has been composed. */
+  hideUntilReady?: boolean;
+  /** Runs once after each newly mounted stage receives its first valid pose. */
+  onReady?: (pose: CameraPose) => void;
 };
+
+export type UseFilmCameraOptions<Anchor extends string = string> =
+  FilmCameraRuntimeOptions<Anchor> & {
+    viewportRef: RefObject<HTMLElement | null>;
+    stageRef: RefObject<HTMLElement | null>;
+  };
 
 type CameraSource = {
   getShot: () => CameraShot<string> | null;
@@ -208,21 +227,74 @@ type CameraSource = {
   shouldAnimate: () => boolean;
 };
 
-function useImperativeFilmCamera<Anchor extends string = string>(options: {
-  viewportRef: RefObject<HTMLElement | null>;
-  stageRef: RefObject<HTMLElement | null>;
-  resolveAnchor?: AnchorResolver<Anchor>;
-  source: CameraSource;
-}): { refresh: () => void } {
-  const { viewportRef, stageRef, resolveAnchor: customResolver, source } = options;
+function useImperativeFilmCamera<Anchor extends string = string>(
+  options: {
+    viewportRef: RefObject<HTMLElement | null>;
+    stageRef: RefObject<HTMLElement | null>;
+    source: CameraSource;
+  } & FilmCameraRuntimeOptions<Anchor>
+): { refresh: () => void } {
+  const { viewportRef, stageRef, source } = options;
   const startRef = useRef<() => void>(() => undefined);
+  const motionRef = useRef(createCameraMotion());
+  const stageNodeRef = useRef<HTMLElement | null>(null);
+  const readyRef = useRef(false);
+  const inputsRef = useRef({
+    fallbackRect: options.fallbackRect,
+    hideUntilReady: options.hideUntilReady ?? false,
+    onReady: options.onReady,
+    resolveAnchor: options.resolveAnchor,
+  });
+  inputsRef.current = {
+    fallbackRect: options.fallbackRect,
+    hideUntilReady: options.hideUntilReady ?? false,
+    onReady: options.onReady,
+    resolveAnchor: options.resolveAnchor,
+  };
 
-  useEffect(() => {
-    let motion = createCameraMotion();
+  useBrowserLayoutEffect(() => {
     let target = null as ReturnType<typeof cameraTargetFromPose> | null;
     let frameHandle = 0;
     let previousFrameTime: number | null = null;
     let disposed = false;
+    let observedAnchor: HTMLElement | null = null;
+    let concealedStage: HTMLElement | null = null;
+    let previousVisibility = '';
+
+    const resizeObserver =
+      typeof ResizeObserver === 'function' ? new ResizeObserver(() => schedule()) : null;
+
+    const observeAnchor = (anchor: HTMLElement | null): void => {
+      if (anchor === observedAnchor) return;
+      if (observedAnchor) resizeObserver?.unobserve(observedAnchor);
+      observedAnchor = anchor;
+      if (observedAnchor) resizeObserver?.observe(observedAnchor);
+    };
+
+    const revealStage = (stage: HTMLElement, pose: CameraPose): void => {
+      if (concealedStage === stage) {
+        stage.style.visibility = previousVisibility;
+        concealedStage = null;
+      }
+      if (readyRef.current) return;
+      readyRef.current = true;
+      inputsRef.current.onReady?.(pose);
+    };
+
+    const prepareStage = (stage: HTMLElement): void => {
+      if (stageNodeRef.current === stage) return;
+      if (concealedStage) concealedStage.style.visibility = previousVisibility;
+      stageNodeRef.current = stage;
+      readyRef.current = false;
+      motionRef.current = createCameraMotion();
+      target = null;
+      previousFrameTime = null;
+      if (inputsRef.current.hideUntilReady) {
+        concealedStage = stage;
+        previousVisibility = stage.style.visibility;
+        stage.style.visibility = 'hidden';
+      }
+    };
 
     const schedule = (): void => {
       if (disposed || frameHandle !== 0) return;
@@ -234,51 +306,103 @@ function useImperativeFilmCamera<Anchor extends string = string>(options: {
       if (disposed) return;
       const viewport = viewportRef.current;
       const stage = stageRef.current;
-      if (!viewport || !stage) {
-        if (source.shouldAnimate()) schedule();
-        return;
-      }
+      if (!viewport || !stage) return;
+      prepareStage(stage);
 
       const delta = previousFrameTime === null ? 0 : (now - previousFrameTime) / 1000;
       previousFrameTime = now;
       const shot = source.getShot();
       if (!shot) {
-        if (source.shouldAnimate()) schedule();
+        target = null;
+        previousFrameTime = null;
+        observeAnchor(null);
         return;
       }
-      const anchorNode = resolveFilmAnchor(stage, shot.anchor as Anchor, customResolver);
+      const anchorNode = resolveFilmAnchor(
+        stage,
+        shot.anchor as Anchor,
+        inputsRef.current.resolveAnchor
+      );
+      observeAnchor(anchorNode);
       const viewportSize = {
         width: viewport.clientWidth,
         height: viewport.clientHeight,
       };
-      const rect = anchorNode
-        ? measureFilmAnchor(stage, anchorNode, motion.scale > 0 ? motion.scale : 1)
+      if (viewportSize.width <= 0 || viewportSize.height <= 0) {
+        previousFrameTime = null;
+        return;
+      }
+      const measuredRect = anchorNode
+        ? measureFilmAnchor(
+            stage,
+            anchorNode,
+            motionRef.current.scale > 0 ? motionRef.current.scale : 1
+          )
         : null;
-      if (rect && viewportSize.width > 0 && viewportSize.height > 0) {
+      const fallback = inputsRef.current.fallbackRect;
+      const rect =
+        measuredRect ?? (typeof fallback === 'function' ? fallback(stage) : (fallback ?? null));
+      if (rect) {
         target = cameraTargetFromPose(solveCameraPose(rect, viewportSize, shot), viewportSize);
-        motion = stepCamera(motion, target, delta);
-        applyCameraPose(stage, cameraPoseFromMotion(motion, viewportSize));
       }
 
-      if (source.shouldAnimate() || !target || !cameraAtRest(motion, target)) schedule();
+      if (target) {
+        let motion = stepCamera(motionRef.current, target, delta);
+        if (cameraAtRest(motion, target)) motion = createCameraMotion(target);
+        motionRef.current = motion;
+        const pose = cameraPoseFromMotion(motion, viewportSize);
+        applyCameraPose(stage, pose);
+        revealStage(stage, pose);
+      }
+
+      if (source.shouldAnimate() || (target && !cameraAtRest(motionRef.current, target)))
+        schedule();
     };
 
     startRef.current = schedule;
     const unsubscribe = source.subscribe(schedule);
     const viewport = viewportRef.current;
-    const resizeObserver =
-      viewport && typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null;
-    if (viewport && resizeObserver) resizeObserver.observe(viewport);
-    schedule();
+    const stage = stageRef.current;
+    if (viewport) resizeObserver?.observe(viewport);
+    if (stage) resizeObserver?.observe(stage);
+    const mutationObserver =
+      stage && typeof MutationObserver === 'function'
+        ? new MutationObserver((records) => {
+            const cameraWriteOnly = records.every(
+              (record) =>
+                record.type === 'attributes' &&
+                record.target === stage &&
+                record.attributeName === 'style'
+            );
+            if (!cameraWriteOnly) schedule();
+          })
+        : null;
+    mutationObserver?.observe(stage!, {
+      attributes: true,
+      attributeFilter: ['class', 'data-film-anchor', 'hidden', 'style'],
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+
+    // The first valid shot is composed during layout, before the browser can
+    // paint an unframed stage. Later changes retain the same motion state.
+    step(typeof performance === 'undefined' ? 0 : performance.now());
 
     return () => {
       disposed = true;
       startRef.current = () => undefined;
       unsubscribe();
       resizeObserver?.disconnect();
+      mutationObserver?.disconnect();
+      if (concealedStage) concealedStage.style.visibility = previousVisibility;
       if (frameHandle !== 0) cancelAnimationFrame(frameHandle);
     };
-  }, [customResolver, source, stageRef, viewportRef]);
+  }, [source, stageRef, viewportRef]);
+
+  // Re-measure after every host commit. This catches same-shot product-state
+  // changes without asking callers to thread a dependency list into the hook.
+  useBrowserLayoutEffect(() => startRef.current());
 
   return { refresh: useCallback(() => startRef.current(), []) };
 }
@@ -291,6 +415,9 @@ export function useFilmCamera<Anchor extends string = string>({
   viewportRef,
   stageRef,
   resolveAnchor: customResolver,
+  fallbackRect,
+  hideUntilReady,
+  onReady,
 }: UseFilmCameraOptions<Anchor>): { refresh: () => void } {
   const { clock, definition } = useFilmContext();
   const source = useMemo<CameraSource>(
@@ -306,21 +433,27 @@ export function useFilmCamera<Anchor extends string = string>({
     viewportRef,
     stageRef,
     resolveAnchor: customResolver,
+    fallbackRect,
+    hideUntilReady,
+    onReady,
     source,
   });
 }
 
-export type UseFilmStepCameraOptions<Anchor extends string = string> = {
-  viewportRef: RefObject<HTMLElement | null>;
-  stageRef: RefObject<HTMLElement | null>;
-  resolveAnchor?: AnchorResolver<Anchor>;
-};
+export type UseFilmStepCameraOptions<Anchor extends string = string> =
+  FilmCameraRuntimeOptions<Anchor> & {
+    viewportRef: RefObject<HTMLElement | null>;
+    stageRef: RefObject<HTMLElement | null>;
+  };
 
 /** Runs the same camera physics, but changes shots only when the host changes film steps. */
 export function useFilmStepCamera<Anchor extends string = string>({
   viewportRef,
   stageRef,
   resolveAnchor: customResolver,
+  fallbackRect,
+  hideUntilReady,
+  onReady,
 }: UseFilmStepCameraOptions<Anchor>): { refresh: () => void } {
   const controller = useFilmStepController();
   const source = useMemo<CameraSource>(
@@ -336,6 +469,9 @@ export function useFilmStepCamera<Anchor extends string = string>({
     viewportRef,
     stageRef,
     resolveAnchor: customResolver,
+    fallbackRect,
+    hideUntilReady,
+    onReady,
     source,
   });
 }

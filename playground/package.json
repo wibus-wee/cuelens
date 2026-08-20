@@ -1,0 +1,37 @@
+{
+  "name": "@interactive-film/playground",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare:runtime": "pnpm --dir .. build",
+    "dev": "pnpm prepare:runtime && vite --host 127.0.0.1",
+    "build": "pnpm prepare:runtime && tsc -b && vite build",
+    "typecheck": "tsc -b",
+    "test:e2e": "playwright test",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/view": "^6.43.9",
+    "@lezer/highlight": "^1.2.3",
+    "@uiw/react-codemirror": "^4.25.11",
+    "@wibus/interactive-film": "link:..",
+    "lucide-react": "^1.32.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^6.0.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "packageManager": "pnpm@11.2.2"
+}
