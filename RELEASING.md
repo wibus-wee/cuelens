@@ -15,18 +15,8 @@ version tag. Do not publish routine releases directly from a workstation.
 5. Protect `main` and require the `Package / Node 22`, `Package / Node 24`, and
    `Playground / Chromium` checks.
 
-If the package does not yet exist on npm, create a short-lived npm granular
-access token that can create packages in the `@wibus` scope and add it as the
-`NPM_TOKEN` secret on the `npm` environment. After the first successful
-publish:
-
-1. Configure npm Trusted Publishing for GitHub Actions with owner `wibus-wee`,
-   repository `cuelens`, workflow filename `release.yml`, and
-   environment `npm`.
-2. Delete the `NPM_TOKEN` environment secret.
-
-Subsequent releases use GitHub OIDC. The workflow requests `id-token: write` and
-publishes npm provenance.
+Do not add an `NPM_TOKEN` secret. Releases use GitHub OIDC exclusively. The
+workflow requests `id-token: write` and publishes npm provenance.
 
 ## Prepare a release
 
@@ -56,9 +46,9 @@ publishes npm provenance.
 
 ## Publish
 
-For the first release, a maintainer may publish from an authenticated local
-workstation. Local npm cannot produce GitHub Actions provenance, so disable it
-for this one command:
+npm requires a package to exist before it can have a trusted publisher. For the
+first release, publish from an authenticated local workstation. Local npm
+cannot produce GitHub Actions provenance, so disable it for this one command:
 
 ```sh
 npm login
@@ -66,9 +56,26 @@ npm whoami
 npm publish --access public --provenance=false
 ```
 
+After npm accepts the package, use npm 11.15 or newer to bind it to the release
+workflow and verify the saved relationship:
+
+```sh
+npm trust github @wibus/cuelens \
+  --repo wibus-wee/cuelens \
+  --file release.yml \
+  --environment npm \
+  --allow-publish \
+  --yes
+npm trust list @wibus/cuelens
+```
+
+The command may request account-level 2FA. It authorizes only
+`.github/workflows/release.yml` in `wibus-wee/cuelens`, running in the GitHub
+environment named `npm`, to publish the package.
+
 Then create and push the annotated tag below. The release workflow detects the
 existing npm version, skips duplicate publication, and creates the GitHub
-Release.
+Release. Later version tags publish through the trusted OIDC relationship.
 
 Create and push an annotated tag from the release commit:
 
