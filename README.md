@@ -19,6 +19,8 @@ React is a peer dependency. React hosts use the separate React entry:
 pnpm add react @wibus/interactive-film
 ```
 
+**AI install prompt:** `Install @wibus/interactive-film in this project, then read node_modules/@wibus/interactive-film/install.md and node_modules/@wibus/interactive-film/dist/docs/usage.md before integrating the appropriate runtime mode into the existing UI.`
+
 ## Choose a mode
 
 | Mode                  | Use it when                                                       | Main API                                                                        |
@@ -96,11 +98,12 @@ export function Demo() {
 
 ## Documentation
 
-| Document                                                                                               | Purpose                                                                                                       |
-| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| [`docs/usage.md`](docs/usage.md)                                                                       | Authoritative installation, automatic and step modes, camera lifecycle, cues, performance, and testing guide. |
-| [`docs/architecture/interactive-onboarding-film.md`](docs/architecture/interactive-onboarding-film.md) | Lody case study, runtime design decisions, and future Creator design.                                         |
-| [`playground/`](playground/)                                                                           | Independent Vite app for guided shots, timeline playback, JSON authoring, and camera diagnostics.             |
+| Document                                                                         | Purpose                                                                                                       |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| [`install.md`](install.md)                                                       | Installation workflow for developers and coding agents.                                                       |
+| [`docs/usage.md`](docs/usage.md)                                                 | Authoritative installation, automatic and step modes, camera lifecycle, cues, performance, and testing guide. |
+| [`docs/architecture/interactive-film.md`](docs/architecture/interactive-film.md) | Runtime boundaries, data flow, camera design, and future Creator architecture.                                |
+| [`playground/`](playground/)                                                     | Independent Vite app for guided shots, timeline playback, JSON authoring, and camera diagnostics.             |
 
 Published packages include this documentation under `dist/docs/`. An AI or
 developer inspecting an installed dependency should start at:
@@ -135,6 +138,6 @@ pnpm check
 pnpm pack
 ```
 
-`pnpm build` emits ESM, declarations, source maps, and a copy of the complete
-`docs/` tree at `dist/docs/`. `pnpm pack` runs that build again and creates the
-same file set npm will publish.
+`pnpm build` emits ESM, declarations, source maps, and public documentation at
+`dist/docs/`. Historical execution plans remain repository-only. `pnpm pack`
+runs that build again and creates the same file set npm will publish.

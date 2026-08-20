@@ -489,8 +489,8 @@ layout, observer, and visual behavior that requires a real DOM.
 
 ## Installed documentation
 
-The published package contains this guide, the documentation index, architecture
-analysis, and historical plans under:
+The published package contains the installation guide, this Usage guide, the
+documentation index, and architecture analysis under:
 
 ```text
 node_modules/@wibus/interactive-film/dist/docs/
