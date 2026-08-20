@@ -2,6 +2,15 @@
   "name": "@wibus/interactive-film",
   "version": "0.1.0",
   "description": "A typed runtime for interactive, camera-driven product films.",
+  "keywords": [
+    "animation",
+    "camera",
+    "interactive-film",
+    "onboarding",
+    "product-tour",
+    "react",
+    "timeline"
+  ],
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -9,6 +18,7 @@
   "files": [
     "dist",
     "install.md",
+    "CHANGELOG.md",
     "README.md",
     "LICENSE"
   ],
@@ -28,11 +38,18 @@
     "test": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test tests/*.test.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm format:check",
+    "check:package": "pnpm build && node scripts/verify-package.mjs",
+    "check": "pnpm typecheck && pnpm test && pnpm check:package && pnpm format:check",
+    "prepublishOnly": "pnpm check",
     "prepack": "pnpm build"
   },
   "peerDependencies": {
     "react": ">=18.3.1"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "18.3.28",
@@ -45,12 +62,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wibus/interactive-film.git"
+    "url": "git+https://github.com/wibus-wee/interactive-film.git"
   },
   "bugs": {
-    "url": "https://github.com/wibus/interactive-film/issues"
+    "url": "https://github.com/wibus-wee/interactive-film/issues"
   },
-  "homepage": "https://github.com/wibus/interactive-film#readme",
+  "homepage": "https://github.com/wibus-wee/interactive-film#readme",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "author": "wibus",
   "packageManager": "pnpm@10.20.0+sha512.cf9998222162dd85864d0a8102e7892e7ba4ceadebbf5a31f9c2fce48dfce317a9c53b9f6464d1ef9042cba2e02ae02f3a09ec066a1e3b41f0192b9dd",
   "license": "MIT"

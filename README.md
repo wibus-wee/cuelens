@@ -1,5 +1,7 @@
 # `@wibus/interactive-film`
 
+[![CI](https://github.com/wibus-wee/interactive-film/actions/workflows/ci.yml/badge.svg)](https://github.com/wibus-wee/interactive-film/actions/workflows/ci.yml)
+
 A typed runtime for interactive product films. One playhead drives numeric
 tracks, narrative beats, camera shots, and host-owned cues against real DOM UI.
 
@@ -108,6 +110,10 @@ export function Demo() {
 | [`docs/usage.md`](docs/usage.md)                                                 | Authoritative installation, automatic and step modes, camera lifecycle, cues, performance, and testing guide. |
 | [`docs/architecture/interactive-film.md`](docs/architecture/interactive-film.md) | Runtime boundaries, data flow, camera design, and future Creator architecture.                                |
 | [`playground/`](playground/)                                                     | Independent Vite app for guided shots, timeline playback, JSON authoring, and camera diagnostics.             |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md)                                             | Local setup, project boundaries, tests, and pull request expectations.                                        |
+| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)                                       | Community participation and enforcement standards.                                                            |
+| [`SECURITY.md`](SECURITY.md)                                                     | Supported releases and private vulnerability reporting.                                                       |
+| [`RELEASING.md`](RELEASING.md)                                                   | Maintainer-only npm and GitHub release procedure.                                                             |
 
 Published packages include this documentation under `dist/docs/`. An AI or
 developer inspecting an installed dependency should start at:
@@ -134,7 +140,7 @@ Open `http://127.0.0.1:4173/`. Guided mode exercises host-owned steps, Timeline
 mode exercises the automatic runtime, and Studio combines CodeMirror JSON with
 visual tracks, keyframes, beats, shots, cues, validation, and live preview.
 
-## Verify a release
+## Verify a change
 
 ```sh
 pnpm install
@@ -145,3 +151,7 @@ pnpm pack
 `pnpm build` emits ESM, declarations, source maps, and public documentation at
 `dist/docs/`. Historical execution plans remain repository-only. `pnpm pack`
 runs that build again and creates the same file set npm will publish.
+
+Contributions are welcome. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before
+opening a pull request. Maintainers should follow [`RELEASING.md`](RELEASING.md)
+instead of publishing directly from a workstation.
