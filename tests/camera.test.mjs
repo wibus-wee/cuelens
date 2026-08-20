@@ -4,7 +4,7 @@ import {
   cameraAtRest,
   cameraTargetFromPose,
   createCameraMotion,
-  measureFilmAnchor,
+  measureCameraAnchor,
   solveCameraPose,
   stepCamera,
 } from '../src/index.ts';
@@ -57,7 +57,7 @@ describe('Cuelens camera', () => {
       getBoundingClientRect: () => ({ left: 300, top: 250, width: 400, height: 200 }),
     };
 
-    assert.deepEqual(measureFilmAnchor(stage, anchor, 2), {
+    assert.deepEqual(measureCameraAnchor(stage, anchor, 2), {
       x: 100,
       y: 100,
       width: 200,

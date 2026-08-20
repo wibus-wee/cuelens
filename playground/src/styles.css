@@ -1121,7 +1121,7 @@ input:focus-visible {
   background: #fff;
 }
 
-.film-stage[data-debug-anchors='true'] [data-film-anchor] {
+.film-stage[data-debug-anchors='true'] [data-cuelens-anchor] {
   outline: 1px dashed rgba(255, 255, 255, 0.48);
   outline-offset: -2px;
 }

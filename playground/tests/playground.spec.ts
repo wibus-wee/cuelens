@@ -28,7 +28,7 @@ test('guided camera frames live anchors across shots', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Show camera anchors' }).click();
   await expect(page.locator('[data-camera-subject="true"]')).toHaveAttribute(
-    'data-film-anchor',
+    'data-cuelens-anchor',
     'story-canvas'
   );
   await page.screenshot({ path: 'test-results/guided-desktop.png', fullPage: true });
@@ -91,9 +91,9 @@ test('studio validates, applies, and runs an edited definition', async ({ page }
     page.locator('.studio-preview-heading').getByText('Edited canvas', { exact: true })
   ).toBeVisible();
 
-  const scrubber = page.locator('input[aria-label="Studio film time"]');
+  const scrubber = page.locator('input[aria-label="Studio sequence time"]');
   await scrubber.fill('0.45');
-  await page.getByRole('button', { name: 'Play studio film' }).click();
+  await page.getByRole('button', { name: 'Play studio sequence' }).click();
   await expect(page.getByText('edited-cue')).toBeVisible();
   await scrubber.fill('1.95');
   await expect(page.getByText('1 COMPLETE')).toBeVisible();
@@ -101,7 +101,7 @@ test('studio validates, applies, and runs an edited definition', async ({ page }
   await page.getByLabel('Loop').check();
   await page.getByLabel('Resolver').uncheck();
   await page.getByLabel('Autoplay').check();
-  await expect(page.getByRole('button', { name: 'Pause studio film' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pause studio sequence' })).toBeVisible();
   await page.getByLabel('x').fill('580');
   await expect(page.getByLabel('x')).toHaveValue('580');
 
@@ -119,7 +119,7 @@ test('studio remains operable in the narrow layout', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Studio' }).click();
 
-  await expect(page.getByLabel('Film duration')).toBeVisible();
+  await expect(page.getByLabel('Sequence duration')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Visual' })).toHaveAttribute('data-active', 'true');
   await page.screenshot({ path: 'test-results/studio-mobile-authoring.png' });
   await page.getByRole('button', { name: 'Code' }).click();
@@ -143,11 +143,11 @@ test('timeline plays and the narrow layout stays within the viewport', async ({ 
   await page.goto('/');
   await page.getByRole('button', { name: 'Timeline' }).click();
   await expect(page.getByText('Phone · 390 × 680')).toBeVisible();
-  const scrubber = page.locator('input[aria-label="Film time"]');
+  const scrubber = page.locator('input[aria-label="Sequence time"]');
   await scrubber.fill('4.9');
   await expect(scrubber).toHaveValue('4.9');
   await expect(page.getByText(/Cue crossed/)).toHaveCount(0);
-  await page.getByRole('button', { name: 'Play film' }).click();
+  await page.getByRole('button', { name: 'Play sequence' }).click();
   await expect(page.getByText('Cue crossed · select-scene')).toBeVisible();
 
   const elapsed = await scrubber.inputValue();

@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { createFilmStepController, defineFilmSteps, validateFilmSteps } from '../src/index.ts';
+import {
+  createSequenceStepController,
+  defineSequenceSteps,
+  validateSequenceSteps,
+} from '../src/index.ts';
 
-describe('semi-automatic film steps', () => {
-  const definition = defineFilmSteps({
+describe('host-controlled sequence steps', () => {
+  const definition = defineSequenceSteps({
     steps: [
       { id: 'workspace', state: { panel: 'closed' } },
       { id: 'composer', state: { panel: 'open' } },
@@ -13,7 +17,7 @@ describe('semi-automatic film steps', () => {
 
   it('keeps the host stateful while exposing deterministic navigation', () => {
     const transitions = [];
-    const controller = createFilmStepController({
+    const controller = createSequenceStepController({
       definition,
       initialStep: 'composer',
       onTransition: (transition) => transitions.push(transition),
@@ -34,12 +38,12 @@ describe('semi-automatic film steps', () => {
   });
 
   it('can address steps by index and reports invalid definitions', () => {
-    const controller = createFilmStepController({ definition });
+    const controller = createSequenceStepController({ definition });
     assert.equal(controller.goTo(2), true);
     assert.equal(controller.getSnapshot().step.id, 'result');
-    assert.throws(() => controller.goTo('missing'), /Unknown film step/);
+    assert.throws(() => controller.goTo('missing'), /Unknown sequence step/);
 
-    const issues = validateFilmSteps({
+    const issues = validateSequenceSteps({
       steps: [{ id: '' }, { id: 'same' }, { id: 'same' }],
     });
     assert.deepEqual(

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { defineFilm, evaluateTrack, frameAt, validateFilm } from '../src/index.ts';
+import { defineSequence, evaluateTrack, frameAt, validateSequence } from '../src/index.ts';
 
-const film = defineFilm({
+const sequence = defineSequence({
   duration: 4,
   tracks: {
     panel: [
@@ -18,7 +18,7 @@ const film = defineFilm({
   cues: [{ id: 'press-button', at: 2.5, anchor: 'button', lead: 0.5 }],
 });
 
-describe('Cuelens timeline and definition', () => {
+describe('Cuelens timeline and sequence', () => {
   it('interpolates keyframes and clamps outside the authored range', () => {
     const track = [
       { time: 1, value: 10 },
@@ -30,7 +30,7 @@ describe('Cuelens timeline and definition', () => {
   });
 
   it('derives tracks, narration, and shot from one requested time', () => {
-    const frame = frameAt(film, 2.5);
+    const frame = frameAt(sequence, 2.5);
     assert.equal(frame.time, 2.5);
     assert.equal(frame.progress, 0.625);
     assert.equal(frame.beat?.id, 'detail');
@@ -38,15 +38,15 @@ describe('Cuelens timeline and definition', () => {
     assert.ok(frame.values.panel > 0 && frame.values.panel < 1);
   });
 
-  it('clamps a requested frame to the film duration', () => {
-    const frame = frameAt(film, 99);
+  it('clamps a requested frame to the sequence duration', () => {
+    const frame = frameAt(sequence, 99);
     assert.equal(frame.time, 4);
     assert.equal(frame.progress, 1);
   });
 
-  it('accepts a valid film and reports actionable authoring errors', () => {
-    assert.deepEqual(validateFilm(film), []);
-    const issues = validateFilm({
+  it('accepts a valid sequence and reports actionable authoring errors', () => {
+    assert.deepEqual(validateSequence(sequence), []);
+    const issues = validateSequence({
       duration: 2,
       tracks: {
         opacity: [

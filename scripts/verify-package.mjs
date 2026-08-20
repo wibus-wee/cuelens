@@ -38,13 +38,34 @@ for (const path of required) {
   assert.ok(files.has(path), `Published package is missing ${path}.`);
 }
 
+const declarationPaths = report.files
+  .map((file) => file.path)
+  .filter((path) => path.endsWith('.d.ts'));
+const declarations = (
+  await Promise.all(
+    declarationPaths.map((path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8'))
+  )
+).join('\n');
+assert.doesNotMatch(
+  declarations,
+  /\b(?:Film[A-Z]\w*|(?:create|define|use|validate)Film\w*|filmAnchorProps)\b/,
+  'Published declarations expose a legacy Film API alias.'
+);
+
 const forbidden = ['src/', 'tests/', 'playground/', 'docs/exec-plans/'];
+const legacyFiles = [
+  'dist/definition.d.ts',
+  'dist/definition.d.ts.map',
+  'dist/definition.js',
+  'dist/definition.js.map',
+];
 for (const path of files) {
   assert.ok(
     forbidden.every((prefix) => !path.startsWith(prefix)),
     `Published package contains repository-only path ${path}.`
   );
   assert.ok(!path.includes('/exec-plans/'), `Published package contains execution plan ${path}.`);
+  assert.ok(!legacyFiles.includes(path), `Published package contains legacy artifact ${path}.`);
 }
 
 console.log(`Verified ${report.files.length} files in ${report.filename}.`);

@@ -31,17 +31,22 @@ import {
   Tablet,
   WandSparkles,
 } from 'lucide-react';
-import { defineFilm, defineFilmSteps, filmAnchorProps, type CameraShot } from '@wibus/cuelens';
 import {
-  FilmProvider,
-  FilmStepProvider,
-  useFilmCamera,
-  useFilmClock,
-  useFilmClockSnapshot,
-  useFilmCues,
-  useFilmFrame,
-  useFilmStep,
-  useFilmStepCamera,
+  defineSequence,
+  defineSequenceSteps,
+  cameraAnchorProps,
+  type CameraShot,
+} from '@wibus/cuelens';
+import {
+  SequenceProvider,
+  SequenceStepProvider,
+  useSequenceCamera,
+  useSequenceClock,
+  useSequenceClockSnapshot,
+  useSequenceCues,
+  useSequenceFrame,
+  useSequenceStep,
+  useSequenceStepCamera,
 } from '@wibus/cuelens/react';
 
 const StudioPlayground = lazy(() =>
@@ -70,7 +75,7 @@ const DEFAULT_PRODUCT_STATE: ProductState = {
   status: 'drafting',
 };
 
-const guidedFilm = defineFilmSteps({
+const guidedSequence = defineSequenceSteps({
   steps: [
     {
       id: 'workspace',
@@ -99,7 +104,7 @@ const guidedFilm = defineFilmSteps({
   ],
 });
 
-const timelineFilm = defineFilm({
+const timelineSequence = defineSequence({
   duration: 18,
   tracks: {
     scene: [
@@ -277,13 +282,13 @@ export function App() {
       </header>
 
       {mode === 'guided' ? (
-        <FilmStepProvider definition={guidedFilm} initialStep="workspace">
+        <SequenceStepProvider definition={guidedSequence} initialStep="workspace">
           <GuidedPlayground viewport={preset} debug={debug} />
-        </FilmStepProvider>
+        </SequenceStepProvider>
       ) : mode === 'timeline' ? (
-        <FilmProvider definition={timelineFilm} autoPlay={false} playbackRate={1}>
+        <SequenceProvider definition={timelineSequence} autoPlay={false} playbackRate={1}>
           <TimelinePlayground viewport={preset} debug={debug} />
-        </FilmProvider>
+        </SequenceProvider>
       ) : (
         <Suspense
           fallback={
@@ -306,7 +311,7 @@ function GuidedPlayground({
   viewport: (typeof viewportPresets)[ViewportPreset];
   debug: boolean;
 }) {
-  const step = useFilmStep();
+  const step = useSequenceStep();
   const state = (step.step.state ?? DEFAULT_PRODUCT_STATE) as ProductState;
   const shot = step.step.shot as CameraShot;
   const metadata = step.step.metadata as { label: string; note: string };
@@ -317,7 +322,7 @@ function GuidedPlayground({
         <ShotList
           activeId={step.step.id}
           onSelect={(id) => step.goTo(id)}
-          items={guidedFilm.steps.map((item, index) => ({
+          items={guidedSequence.steps.map((item, index) => ({
             id: item.id,
             index: index + 1,
             label: (item.metadata as { label: string }).label,
@@ -329,9 +334,9 @@ function GuidedPlayground({
       transport={
         <GuidedTransport
           index={step.index}
-          count={guidedFilm.steps.length}
+          count={guidedSequence.steps.length}
           canPrevious={step.index > 0}
-          canNext={step.index < guidedFilm.steps.length - 1}
+          canNext={step.index < guidedSequence.steps.length - 1}
           onPrevious={step.previous}
           onNext={step.next}
           onReset={step.reset}
@@ -350,9 +355,9 @@ function TimelinePlayground({
   viewport: (typeof viewportPresets)[ViewportPreset];
   debug: boolean;
 }) {
-  const clock = useFilmClock();
-  const snapshot = useFilmClockSnapshot();
-  const frame = useFilmFrame();
+  const clock = useSequenceClock();
+  const snapshot = useSequenceClockSnapshot();
+  const frame = useSequenceFrame();
   const [lastCue, setLastCue] = useState<string | null>(null);
   const cueTimerRef = useRef<number | null>(null);
   const status: DeliveryStatus =
@@ -364,9 +369,9 @@ function TimelinePlayground({
     status,
   };
   const activeBeat = frame.beat;
-  const shot = activeBeat?.shot ?? timelineFilm.beats[0]!.shot!;
+  const shot = activeBeat?.shot ?? timelineSequence.beats[0]!.shot!;
 
-  useFilmCues({
+  useSequenceCues({
     onCue: (cue) => {
       setLastCue(cue.id);
       if (cueTimerRef.current !== null) window.clearTimeout(cueTimerRef.current);
@@ -444,7 +449,7 @@ function GuidedCameraViewport({
   const stageRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
   const onReady = useCallback(() => setReady(true), []);
-  const camera = useFilmStepCamera({
+  const camera = useSequenceStepCamera({
     viewportRef,
     stageRef,
     fallbackRect: FALLBACK_RECT,
@@ -476,7 +481,7 @@ function TimelineCameraViewport({
   const stageRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
   const onReady = useCallback(() => setReady(true), []);
-  const camera = useFilmCamera({
+  const camera = useSequenceCamera({
     viewportRef,
     stageRef,
     fallbackRect: FALLBACK_RECT,
@@ -537,7 +542,7 @@ const ProductStage = forwardRef<
   }
 >(function ProductStage({ state, activeAnchor, debug }, ref) {
   const anchor = (name: string) => ({
-    ...filmAnchorProps(name),
+    ...cameraAnchorProps(name),
     'data-anchor-label': name,
     'data-camera-subject': debug && activeAnchor === name ? 'true' : undefined,
   });
@@ -751,7 +756,7 @@ function ShotList({
         <span className="section-label">Driver</span>
         <div className="driver-row">
           <Crosshair size={15} />
-          <span>FilmStepController</span>
+          <span>SequenceStepController</span>
           <i>host</i>
         </div>
       </div>
@@ -770,10 +775,10 @@ function BeatList({
     <>
       <div className="panel-heading">
         <span>Beats</span>
-        <small>{timelineFilm.beats.length}</small>
+        <small>{timelineSequence.beats.length}</small>
       </div>
       <nav className="shot-list" aria-label="Timeline beats">
-        {timelineFilm.beats.map((beat, index) => (
+        {timelineSequence.beats.map((beat, index) => (
           <button
             key={beat.id}
             type="button"
@@ -793,7 +798,7 @@ function BeatList({
         <span className="section-label">Driver</span>
         <div className="driver-row">
           <Play size={15} />
-          <span>FilmClock</span>
+          <span>SequenceClock</span>
           <i>18s</i>
         </div>
       </div>
@@ -887,8 +892,8 @@ function GuidedTransport({
         <button
           type="button"
           className="reset-step-button"
-          aria-label="Reset guided film"
-          title="Reset guided film"
+          aria-label="Reset guided sequence"
+          title="Reset guided sequence"
           disabled={index === 0}
           onClick={() => onReset()}
         >
@@ -908,21 +913,21 @@ function GuidedTransport({
 }
 
 function TimelineTransport() {
-  const clock = useFilmClock();
-  const snapshot = useFilmClockSnapshot();
+  const clock = useSequenceClock();
+  const snapshot = useSequenceClockSnapshot();
   const rates = [0.5, 1, 1.5];
 
   return (
     <div className="timeline-transport">
       <div className="playback-buttons">
-        <IconButton label="Restart film" onClick={clock.restart}>
+        <IconButton label="Restart sequence" onClick={clock.restart}>
           <RotateCcw size={16} />
         </IconButton>
         <button
           className="play-button"
           type="button"
-          aria-label={snapshot.playing ? 'Pause film' : 'Play film'}
-          title={snapshot.playing ? 'Pause film' : 'Play film'}
+          aria-label={snapshot.playing ? 'Pause sequence' : 'Play sequence'}
+          title={snapshot.playing ? 'Pause sequence' : 'Play sequence'}
           onClick={snapshot.playing ? clock.pause : clock.play}
         >
           {snapshot.playing ? (
@@ -940,7 +945,7 @@ function TimelineTransport() {
         max={snapshot.duration}
         step={0.01}
         value={snapshot.time}
-        aria-label="Film time"
+        aria-label="Sequence time"
         style={
           { '--scrub-progress': `${(snapshot.time / snapshot.duration) * 100}%` } as CSSProperties
         }

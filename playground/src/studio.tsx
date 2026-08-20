@@ -24,20 +24,20 @@ import {
   EASINGS,
   evaluateTrack,
   solveCameraPose,
-  validateFilm,
-  type AnyFilmDefinition,
+  validateSequence,
+  type AnySequenceDefinition,
   type CameraShot,
-  type FilmValidationIssue,
+  type SequenceValidationIssue,
   type Rect,
 } from '@wibus/cuelens';
 import {
-  FilmAnchor,
-  FilmProvider,
-  useFilmCamera,
-  useFilmClock,
-  useFilmClockSnapshot,
-  useFilmCues,
-  useFilmFrame,
+  CameraAnchor,
+  SequenceProvider,
+  useSequenceCamera,
+  useSequenceClock,
+  useSequenceClockSnapshot,
+  useSequenceCues,
+  useSequenceFrame,
 } from '@wibus/cuelens/react';
 import './studio.css';
 
@@ -93,13 +93,13 @@ const DEFAULT_STUDIO_SOURCE = `{
 }`;
 
 type StudioIssue = {
-  code: FilmValidationIssue['code'] | 'schema';
+  code: SequenceValidationIssue['code'] | 'schema';
   path: string;
   message: string;
 };
 
 type DraftResult = {
-  definition: AnyFilmDefinition | null;
+  definition: AnySequenceDefinition | null;
   issues: StudioIssue[];
 };
 
@@ -291,15 +291,15 @@ function parseStudioDefinition(source: string): DraftResult {
   });
 
   if (issues.length > 0) return { definition: null, issues };
-  const definition = value as AnyFilmDefinition;
-  return { definition, issues: validateFilm(definition) };
+  const definition = value as AnySequenceDefinition;
+  return { definition, issues: validateSequence(definition) };
 }
 
-function cloneStudioDefinition(definition: AnyFilmDefinition): MutableStudioDefinition {
+function cloneStudioDefinition(definition: AnySequenceDefinition): MutableStudioDefinition {
   return JSON.parse(JSON.stringify(definition)) as MutableStudioDefinition;
 }
 
-function studioSource(definition: AnyFilmDefinition): string {
+function studioSource(definition: AnySequenceDefinition): string {
   return JSON.stringify(definition, null, 2);
 }
 
@@ -322,7 +322,7 @@ export function StudioPlayground() {
   const initial = useMemo(() => parseStudioDefinition(DEFAULT_STUDIO_SOURCE), []);
   const [draft, setDraft] = useState(DEFAULT_STUDIO_SOURCE);
   const [appliedSource, setAppliedSource] = useState(DEFAULT_STUDIO_SOURCE);
-  const [definition, setDefinition] = useState<AnyFilmDefinition>(() => initial.definition!);
+  const [definition, setDefinition] = useState<AnySequenceDefinition>(() => initial.definition!);
   const [authorMode, setAuthorMode] = useState<AuthorMode>('visual');
   const [revision, setRevision] = useState(1);
   const [completionCount, setCompletionCount] = useState(0);
@@ -359,7 +359,7 @@ export function StudioPlayground() {
   }, []);
 
   const updateVisualDefinition = useCallback(
-    (next: AnyFilmDefinition) => {
+    (next: AnySequenceDefinition) => {
       const source = studioSource(next);
       const result = parseStudioDefinition(source);
       setDraft(source);
@@ -466,7 +466,7 @@ export function StudioPlayground() {
           dirty={dirty}
         />
 
-        <FilmProvider
+        <SequenceProvider
           key={providerKey}
           definition={definition}
           autoPlay={options.autoPlay}
@@ -482,7 +482,7 @@ export function StudioPlayground() {
             fallbackRect={fallbackRect}
             onFallbackRectChange={setFallbackRect}
           />
-        </FilmProvider>
+        </SequenceProvider>
       </div>
     </section>
   );
@@ -503,8 +503,8 @@ function StudioAuthorPane({
   onModeChange: (mode: AuthorMode) => void;
   draft: string;
   onDraftChange: (source: string) => void;
-  definition: AnyFilmDefinition;
-  onDefinitionChange: (definition: AnyFilmDefinition) => void;
+  definition: AnySequenceDefinition;
+  onDefinitionChange: (definition: AnySequenceDefinition) => void;
   onSeek: (time: number) => void;
   issues: StudioIssue[];
   dirty: boolean;
@@ -513,7 +513,7 @@ function StudioAuthorPane({
     <section
       className="studio-editor-pane"
       data-author-mode={mode}
-      aria-label="Film definition editor"
+      aria-label="Sequence definition editor"
     >
       <div className="studio-pane-heading">
         <div className="studio-author-tabs" aria-label="Authoring view">
@@ -562,7 +562,9 @@ function StudioAuthorPane({
       )}
       <div className="studio-editor-footer">
         <span>
-          {mode === 'visual' ? `${definition.duration}s film` : `${draft.split('\n').length} lines`}
+          {mode === 'visual'
+            ? `${definition.duration}s sequence`
+            : `${draft.split('\n').length} lines`}
         </span>
         <span>{dirty ? 'Draft not running' : 'Runtime in sync'}</span>
       </div>
@@ -575,8 +577,8 @@ function VisualDefinitionEditor({
   onChange,
   onSeek,
 }: {
-  definition: AnyFilmDefinition;
-  onChange: (definition: AnyFilmDefinition) => void;
+  definition: AnySequenceDefinition;
+  onChange: (definition: AnySequenceDefinition) => void;
   onSeek: (time: number) => void;
 }) {
   const [section, setSection] = useState<VisualSection>('beats');
@@ -595,7 +597,7 @@ function VisualDefinitionEditor({
   const mutate = (update: (next: MutableStudioDefinition) => void): void => {
     const next = cloneStudioDefinition(definition);
     update(next);
-    onChange(next as AnyFilmDefinition);
+    onChange(next as AnySequenceDefinition);
   };
 
   const addTrack = (): void => {
@@ -654,9 +656,9 @@ function VisualDefinitionEditor({
     <div className="visual-editor">
       <div className="visual-duration-row">
         <label>
-          <span>Film duration</span>
+          <span>Sequence duration</span>
           <input
-            aria-label="Film duration"
+            aria-label="Sequence duration"
             type="number"
             min={0.1}
             step={0.5}
@@ -1285,7 +1287,7 @@ function StudioRuntime({
   fallbackRect,
   onFallbackRectChange,
 }: {
-  definition: AnyFilmDefinition;
+  definition: AnySequenceDefinition;
   resolverEnabled: boolean;
   completionCount: number;
   draftIssues: StudioIssue[];
@@ -1293,9 +1295,9 @@ function StudioRuntime({
   fallbackRect: Rect;
   onFallbackRectChange: (rect: Rect) => void;
 }) {
-  const clock = useFilmClock();
-  const snapshot = useFilmClockSnapshot();
-  const frame = useFilmFrame();
+  const clock = useSequenceClock();
+  const snapshot = useSequenceClockSnapshot();
+  const frame = useSequenceFrame();
   const viewportRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
@@ -1312,7 +1314,7 @@ function StudioRuntime({
   const resolveFallback = useCallback(() => fallbackRef.current, []);
   const onReady = useCallback(() => setReady(true), []);
 
-  const camera = useFilmCamera({
+  const camera = useSequenceCamera({
     viewportRef,
     stageRef,
     resolveAnchor: resolverEnabled ? resolveAnchor : undefined,
@@ -1328,7 +1330,7 @@ function StudioRuntime({
     clock.seek(seekRequest.time);
   }, [clock, seekRequest]);
 
-  useFilmCues({
+  useSequenceCues({
     onCue: (cue) => setCueLog((current) => [{ id: cue.id, at: cue.at }, ...current].slice(0, 4)),
   });
 
@@ -1349,7 +1351,7 @@ function StudioRuntime({
 
   return (
     <>
-      <section className="studio-preview-pane" aria-label="Live film runtime">
+      <section className="studio-preview-pane" aria-label="Live sequence runtime">
         <div className="studio-preview-heading">
           <div>
             <CircleDot size={14} />
@@ -1365,7 +1367,7 @@ function StudioRuntime({
         <div className="studio-preview-canvas">
           <div ref={viewportRef} className="studio-camera-viewport">
             <div ref={stageRef} className="studio-stage" style={stageStyle}>
-              <FilmAnchor anchor="studio-canvas" className="studio-canvas-anchor">
+              <CameraAnchor anchor="studio-canvas" className="studio-canvas-anchor">
                 <header className="studio-film-header">
                   <div>
                     <span>NF / 04</span>
@@ -1393,7 +1395,7 @@ function StudioRuntime({
                   <span />
                   <span />
                 </div>
-              </FilmAnchor>
+              </CameraAnchor>
               <div className="studio-resolver-target" data-studio-resolver="true">
                 <Crosshair size={26} />
                 <span>virtual-focus</span>
@@ -1425,17 +1427,17 @@ function StudioRuntime({
 }
 
 function StudioTransport() {
-  const clock = useFilmClock();
-  const snapshot = useFilmClockSnapshot();
+  const clock = useSequenceClock();
+  const snapshot = useSequenceClockSnapshot();
   return (
     <div className="studio-transport">
-      <button type="button" aria-label="Restart studio film" onClick={clock.restart}>
+      <button type="button" aria-label="Restart studio sequence" onClick={clock.restart}>
         <RotateCcw size={15} />
       </button>
       <button
         type="button"
         className="studio-play-button"
-        aria-label={snapshot.playing ? 'Pause studio film' : 'Play studio film'}
+        aria-label={snapshot.playing ? 'Pause studio sequence' : 'Play studio sequence'}
         onClick={snapshot.playing ? clock.pause : clock.play}
       >
         {snapshot.playing ? (
@@ -1446,7 +1448,7 @@ function StudioTransport() {
       </button>
       <span>{formatTime(snapshot.time)}</span>
       <input
-        aria-label="Studio film time"
+        aria-label="Studio sequence time"
         type="range"
         min={0}
         max={snapshot.duration}
@@ -1483,7 +1485,7 @@ function StudioInspector({
   fallbackRect,
   onFallbackRectChange,
 }: {
-  definition: AnyFilmDefinition;
+  definition: AnySequenceDefinition;
   frameValues: Record<string, number>;
   activeShot: CameraShot | null;
   activeAnchor: string;
@@ -1586,7 +1588,7 @@ function StudioInspector({
   );
 }
 
-function TrackPlot({ definition }: { definition: AnyFilmDefinition }) {
+function TrackPlot({ definition }: { definition: AnySequenceDefinition }) {
   return (
     <div className="studio-track-plot">
       {Object.entries(definition.tracks)

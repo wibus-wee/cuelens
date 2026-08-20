@@ -34,7 +34,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node scripts/copy-docs.mjs",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json && node scripts/copy-docs.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test tests/*.test.mjs",
     "format": "prettier --write .",

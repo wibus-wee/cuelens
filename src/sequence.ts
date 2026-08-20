@@ -1,7 +1,7 @@
 import type { CameraShot } from './camera.ts';
 import { evaluateTimeline, timelineDuration, type NumericTimeline } from './timeline.ts';
 
-export type FilmBeat<
+export type SequenceBeat<
   BeatId extends string = string,
   Anchor extends string = string,
   Metadata = unknown,
@@ -14,7 +14,7 @@ export type FilmBeat<
   metadata?: Metadata;
 };
 
-export type FilmCue<
+export type SequenceCue<
   CueId extends string = string,
   Anchor extends string = string,
   Payload = unknown,
@@ -29,7 +29,7 @@ export type FilmCue<
   payload?: Payload;
 };
 
-export type FilmDefinition<
+export type SequenceDefinition<
   Track extends string = string,
   BeatId extends string = string,
   Anchor extends string = string,
@@ -39,13 +39,20 @@ export type FilmDefinition<
 > = {
   duration: number;
   tracks: NumericTimeline<Track>;
-  beats: readonly FilmBeat<BeatId, Anchor, BeatMetadata>[];
-  cues: readonly FilmCue<CueId, Anchor, CuePayload>[];
+  beats: readonly SequenceBeat<BeatId, Anchor, BeatMetadata>[];
+  cues: readonly SequenceCue<CueId, Anchor, CuePayload>[];
 };
 
-export type AnyFilmDefinition = FilmDefinition<string, string, string, string, unknown, unknown>;
+export type AnySequenceDefinition = SequenceDefinition<
+  string,
+  string,
+  string,
+  string,
+  unknown,
+  unknown
+>;
 
-export type FilmFrame<
+export type SequenceFrame<
   Track extends string = string,
   BeatId extends string = string,
   Anchor extends string = string,
@@ -54,18 +61,18 @@ export type FilmFrame<
   time: number;
   progress: number;
   values: Record<Track, number>;
-  beat: FilmBeat<BeatId, Anchor, BeatMetadata> | null;
+  beat: SequenceBeat<BeatId, Anchor, BeatMetadata> | null;
   beatIndex: number;
   shot: CameraShot<Anchor> | null;
 };
 
-export function defineFilm<const Definition extends AnyFilmDefinition>(
+export function defineSequence<const Definition extends AnySequenceDefinition>(
   definition: Definition
 ): Definition {
   return definition;
 }
 
-export function beatIndexAt(definition: AnyFilmDefinition, time: number): number {
+export function beatIndexAt(definition: AnySequenceDefinition, time: number): number {
   let active = -1;
   for (let index = 0; index < definition.beats.length; index += 1) {
     if (definition.beats[index]!.at > time) break;
@@ -74,7 +81,7 @@ export function beatIndexAt(definition: AnyFilmDefinition, time: number): number
   return active;
 }
 
-export function beatAt<Definition extends AnyFilmDefinition>(
+export function beatAt<Definition extends AnySequenceDefinition>(
   definition: Definition,
   time: number
 ): Definition['beats'][number] | null {
@@ -90,9 +97,9 @@ export function frameAt<
   BeatMetadata,
   CuePayload,
 >(
-  definition: FilmDefinition<Track, BeatId, Anchor, CueId, BeatMetadata, CuePayload>,
+  definition: SequenceDefinition<Track, BeatId, Anchor, CueId, BeatMetadata, CuePayload>,
   requestedTime: number
-): FilmFrame<Track, BeatId, Anchor, BeatMetadata> {
+): SequenceFrame<Track, BeatId, Anchor, BeatMetadata> {
   const time = Math.max(0, Math.min(requestedTime, definition.duration));
   const beatIndex = beatIndexAt(definition, time);
   const beat = beatIndex < 0 ? null : (definition.beats[beatIndex] ?? null);
@@ -106,7 +113,7 @@ export function frameAt<
   };
 }
 
-export type FilmValidationIssue = {
+export type SequenceValidationIssue = {
   code:
     | 'invalid-duration'
     | 'track-after-duration'
@@ -122,13 +129,13 @@ export type FilmValidationIssue = {
   message: string;
 };
 
-export function validateFilm(definition: AnyFilmDefinition): FilmValidationIssue[] {
-  const issues: FilmValidationIssue[] = [];
+export function validateSequence(definition: AnySequenceDefinition): SequenceValidationIssue[] {
+  const issues: SequenceValidationIssue[] = [];
   if (!Number.isFinite(definition.duration) || definition.duration <= 0) {
     issues.push({
       code: 'invalid-duration',
       path: 'duration',
-      message: 'Film duration must be a finite number greater than zero.',
+      message: 'Sequence duration must be a finite number greater than zero.',
     });
   }
 
@@ -147,7 +154,7 @@ export function validateFilm(definition: AnyFilmDefinition): FilmValidationIssue
         issues.push({
           code: 'track-after-duration',
           path: `tracks.${trackName}.${index}.time`,
-          message: `Track "${trackName}" has a keyframe after the film duration.`,
+          message: `Track "${trackName}" has a keyframe after the sequence duration.`,
         });
       }
       previous = keyframe.time;
@@ -161,7 +168,7 @@ export function validateFilm(definition: AnyFilmDefinition): FilmValidationIssue
       issues.push({
         code: 'cue-lead-before-start',
         path: `cues.${index}.lead`,
-        message: `Cue "${cue.id}" begins approaching before the film starts.`,
+        message: `Cue "${cue.id}" begins approaching before the sequence starts.`,
       });
     }
   });
@@ -177,7 +184,7 @@ function validateTimedItems(
   items: readonly { id: string; at: number }[],
   duration: number,
   kind: 'beat' | 'cue',
-  issues: FilmValidationIssue[]
+  issues: SequenceValidationIssue[]
 ): void {
   const seen = new Set<string>();
   let previous = Number.NEGATIVE_INFINITY;
@@ -194,7 +201,7 @@ function validateTimedItems(
       issues.push({
         code: kind === 'beat' ? 'beat-out-of-range' : 'cue-out-of-range',
         path: `${kind}s.${index}.at`,
-        message: `${kind === 'beat' ? 'Beat' : 'Cue'} "${item.id}" is outside the film.`,
+        message: `${kind === 'beat' ? 'Beat' : 'Cue'} "${item.id}" is outside the sequence.`,
       });
     }
     if (item.at < previous) {

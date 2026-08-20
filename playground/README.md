@@ -6,8 +6,8 @@ An independent Vite and React application for exercising Cuelens against a fixtu
 
 | Area            | Responsibility                                                                                                   |
 | --------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Guided mode     | Drives four authored shots, direct navigation, and reset through `FilmStepProvider`.                             |
-| Timeline mode   | Drives tracks, beats, cues, seek, rate, and camera motion through `FilmProvider`.                                |
+| Guided mode     | Drives four authored shots, direct navigation, and reset through `SequenceStepProvider`.                         |
+| Timeline mode   | Drives tracks, beats, cues, seek, rate, and camera motion through `SequenceProvider`.                            |
 | Studio mode     | Visually edits tracks, keyframes, beats, camera shots, and cues, with a synchronized CodeMirror view.            |
 | Runtime lab     | Exposes autoplay, loop, completion, resolver, fallback geometry, easing curves, cues, and frame values.          |
 | Product stage   | Renders deterministic film-review fixtures with stable authored dimensions and live DOM anchors.                 |

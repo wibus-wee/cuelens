@@ -9,9 +9,9 @@ series.
 ### Added
 
 - Cuelens package identity under `@wibus/cuelens`.
-- Typed automatic films with numeric tracks, narrative beats, camera shots, and
+- Typed automatic sequences with numeric tracks, narrative beats, camera shots, and
   host-owned cues.
-- Host-controlled step films for onboarding, forms, and wizard flows.
+- Host-controlled step sequences for onboarding, forms, and wizard flows.
 - Deterministic clock, seek, restart, loop, and cue replay semantics.
 - Transform-aware DOM camera framing with spring motion and React adapters.
 - Packaged installation, Usage, and architecture documentation.

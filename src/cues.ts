@@ -1,23 +1,23 @@
-import type { FilmClock, FilmClockTransition } from './clock.ts';
-import type { FilmCue } from './definition.ts';
+import type { SequenceClock, SequenceClockTransition } from './clock.ts';
+import type { SequenceCue } from './sequence.ts';
 
-export type CueController<Cue extends FilmCue = FilmCue> = {
+export type CueController<Cue extends SequenceCue = SequenceCue> = {
   hasFired: (cueId: Cue['id']) => boolean;
   reset: () => void;
   dispose: () => void;
 };
 
-export function createCueController<Cue extends FilmCue>(options: {
-  clock: FilmClock;
+export function createCueController<Cue extends SequenceCue>(options: {
+  clock: SequenceClock;
   cues: readonly Cue[];
-  onCue: (cue: Cue, transition: FilmClockTransition) => void;
+  onCue: (cue: Cue, transition: SequenceClockTransition) => void;
 }): CueController<Cue> {
   const fired = new Set<Cue['id']>();
 
   const fireRange = (
     from: number,
     to: number,
-    transition: FilmClockTransition,
+    transition: SequenceClockTransition,
     includeStart: boolean
   ): void => {
     for (const cue of options.cues) {

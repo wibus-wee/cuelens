@@ -1,7 +1,7 @@
 import { EASINGS, resolveEasing, type EasingFunction, type EasingName } from './easing.ts';
 
 export type Keyframe = {
-  /** Seconds from the start of the film. */
+  /** Seconds from the start of the sequence. */
   time: number;
   value: number;
   /** Easing for the segment ending at this keyframe. */

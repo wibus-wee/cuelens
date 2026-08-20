@@ -11,22 +11,22 @@ a camera that frames host-owned DOM anchors.
 
 ## System map
 
-| Area                    | Owner                                                                                      | Responsibility                                                                                  | Depends on                                                  |
-| ----------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Definition and timeline | [`src/definition.ts`](../../src/definition.ts), [`src/timeline.ts`](../../src/timeline.ts) | Preserve authored tracks, beats, shots, and cues; derive a frame for any time.                  | Easing registry only.                                       |
-| Automatic clock         | [`src/clock.ts`](../../src/clock.ts)                                                       | Play, pause, seek, restart, change rate, loop, and publish deterministic transitions.           | An injectable frame driver.                                 |
-| Cue controller          | [`src/cues.ts`](../../src/cues.ts)                                                         | Fire natural crossings once and re-arm them correctly after rewind, restart, or loop.           | Clock transitions.                                          |
-| Step controller         | [`src/steps.ts`](../../src/steps.ts)                                                       | Expose deterministic host-controlled navigation without creating a playhead.                    | A step definition.                                          |
-| Camera core             | [`src/camera.ts`](../../src/camera.ts)                                                     | Resolve and measure anchors, solve fit geometry, integrate spring motion, and apply transforms. | Browser DOM only for measurement and transform application. |
-| React adapter           | [`src/react.tsx`](../../src/react.tsx)                                                     | Provide external stores through React and run camera motion outside React renders.              | React peer dependency and the core modules.                 |
-| Playground              | [`playground/`](../../playground/)                                                         | Exercise automatic, step, camera, validation, and authoring behavior against a fixture UI.      | The package's built public exports.                         |
+| Area                  | Owner                                                                                  | Responsibility                                                                                  | Depends on                                                  |
+| --------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Sequence and timeline | [`src/sequence.ts`](../../src/sequence.ts), [`src/timeline.ts`](../../src/timeline.ts) | Preserve authored tracks, beats, shots, and cues; derive a frame for any time.                  | Easing registry only.                                       |
+| Automatic clock       | [`src/clock.ts`](../../src/clock.ts)                                                   | Play, pause, seek, restart, change rate, loop, and publish deterministic transitions.           | An injectable frame driver.                                 |
+| Cue controller        | [`src/cues.ts`](../../src/cues.ts)                                                     | Fire natural crossings once and re-arm them correctly after rewind, restart, or loop.           | Clock transitions.                                          |
+| Step controller       | [`src/steps.ts`](../../src/steps.ts)                                                   | Expose deterministic host-controlled navigation without creating a playhead.                    | A step definition.                                          |
+| Camera core           | [`src/camera.ts`](../../src/camera.ts)                                                 | Resolve and measure anchors, solve fit geometry, integrate spring motion, and apply transforms. | Browser DOM only for measurement and transform application. |
+| React adapter         | [`src/react.tsx`](../../src/react.tsx)                                                 | Provide external stores through React and run camera motion outside React renders.              | React peer dependency and the core modules.                 |
+| Playground            | [`playground/`](../../playground/)                                                     | Exercise automatic, step, camera, validation, and authoring behavior against a fixture UI.      | The package's built public exports.                         |
 
 The root package entry is React-independent. React-specific behavior is exposed
 only through `@wibus/cuelens/react`.
 
 ## Core model
 
-Automatic films reduce the visible experience to one question: what should the
+Automatic sequences reduce the visible experience to one question: what should the
 host show at time `t`?
 
 ```text
@@ -50,7 +50,7 @@ The automatic runtime therefore uses one story clock. Camera physics may use a
 separate animation-frame loop, but it reads the current story state rather than
 creating another narrative clock.
 
-Host-controlled films use a different source of authority. A form, router,
+Host-controlled sequences use a different source of authority. A form, router,
 wizard, or async workflow changes the active step explicitly. The step carries
 host state and an optional shot; the runtime does not add time-based progression
 or dispatch product actions.
@@ -133,7 +133,7 @@ geometry but do not create nested ownership over the same flow.
 
 ```text
 FrameDriver
-    -> FilmClock transition
+    -> SequenceClock transition
         -> frameAt(definition, time)
             -> numeric host state
             -> active beat and shot
@@ -144,7 +144,7 @@ FrameDriver
             -> stage transform
 ```
 
-`FilmClock` is an external store. It publishes snapshots for view subscribers
+`SequenceClock` is an external store. It publishes snapshots for view subscribers
 and detailed transitions for cue and camera consumers. An injected
 `FrameDriver` makes clock behavior deterministic in tests.
 
@@ -157,7 +157,7 @@ responsibility.
 
 ```text
 host navigation or async result
-    -> FilmStepController transition
+    -> SequenceStepController transition
         -> new step state rendered by host
         -> new shot read by camera
             -> anchor measurement
@@ -175,8 +175,8 @@ viewport as the visible frame.
 
 ### Anchor resolution
 
-The default contract is an exact `data-film-anchor` value. Existing nodes can be
-marked without wrappers through `filmAnchorProps()`. Dynamic lists, virtualized
+The default contract is an exact `data-cuelens-anchor` value. Existing nodes can be
+marked without wrappers through `cameraAnchorProps()`. Dynamic lists, virtualized
 rows, portals, or product identity attributes may use a custom resolver.
 
 The resolver should prefer stable product identity. Styling classes and
@@ -275,7 +275,7 @@ The system separates work by update frequency.
 | Quantized continuous | Typewriter progress, annotation reveal, meters.         | Small subscribed subtree or ref write.                    |
 | Structural           | Rows, tabs, panels, task state, navigation.             | React props derived through integer or coarse thresholds. |
 
-`useFilmFrame()` subscribes its caller to every story-clock tick. It should live
+`useSequenceFrame()` subscribes its caller to every story-clock tick. It should live
 in a small conductor that derives a coarse product state. Passing raw fractional
 track values through a large product tree creates high render cost without
 necessarily changing visible output.
@@ -313,7 +313,7 @@ framework, or a privileged automation layer.
 
 The repository playground proves a synchronized visual and JSON editing flow,
 but it is not a published Creator. A production authoring tool should generate
-validated film data and adapter scaffolding instead of generating arbitrary
+validated sequence data and adapter scaffolding instead of generating arbitrary
 React animation code.
 
 ### Layers
@@ -384,7 +384,7 @@ TypeScript should not become the editor's database.
 An inspector should:
 
 1. Show the live DOM rectangle on hover.
-2. Reuse an existing `data-film-anchor` or stable product identity selector.
+2. Reuse an existing `data-cuelens-anchor` or stable product identity selector.
 3. Reject styling classes and positional selectors as publishable contracts.
 4. Preview fit, padding, scale bounds, and focus placement.
 5. Verify that the anchor exists with non-zero dimensions across target

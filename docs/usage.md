@@ -14,14 +14,14 @@ The root entry has no React dependency:
 
 ```ts
 import {
-  createFilmClock,
-  createFilmStepController,
-  defineFilm,
-  defineFilmSteps,
-  filmAnchorProps,
+  createSequenceClock,
+  createSequenceStepController,
+  defineSequence,
+  defineSequenceSteps,
+  cameraAnchorProps,
   frameAt,
-  validateFilm,
-  validateFilmSteps,
+  validateSequence,
+  validateSequenceSteps,
 } from '@wibus/cuelens';
 ```
 
@@ -29,26 +29,26 @@ React hosts install a compatible React version and import adapters separately:
 
 ```ts
 import {
-  FilmAnchor,
-  FilmProvider,
-  FilmStepProvider,
-  useFilmCamera,
-  useFilmClock,
-  useFilmClockSnapshot,
-  useFilmCues,
-  useFilmFrame,
-  useFilmStep,
-  useFilmStepCamera,
+  CameraAnchor,
+  SequenceProvider,
+  SequenceStepProvider,
+  useSequenceCamera,
+  useSequenceClock,
+  useSequenceClockSnapshot,
+  useSequenceCues,
+  useSequenceFrame,
+  useSequenceStep,
+  useSequenceStepCamera,
 } from '@wibus/cuelens/react';
 ```
 
 ## Choose the control model
 
-Use an automatic film when time is authoritative. Tracks, narration, shots, and
+Use an automatic sequence when time is authoritative. Tracks, narration, shots, and
 cues all derive from one clock, so play, pause, seek, rate changes, restart, and
 loop stay aligned.
 
-Use film steps when the host is authoritative. This fits onboarding forms and
+Use sequence steps when the host is authoritative. This fits onboarding forms and
 wizards where navigation, validation, or async work decides when the user may
 continue. A step may carry host-owned state and a camera shot, but it does not
 create a playhead or dispatch product actions.
@@ -56,16 +56,16 @@ create a playhead or dispatch product actions.
 Do not mount both models merely to control the same flow. They share camera
 primitives, but each model should have one clear owner.
 
-## Define an automatic film
+## Define an automatic sequence
 
-`defineFilm()` preserves literal names for tracks, beats, cues, and anchors.
+`defineSequence()` preserves literal names for tracks, beats, cues, and anchors.
 Tracks contain numeric keyframes. Beats select narrative content and the current
 camera shot. Cues identify imperative moments whose meaning belongs to the host.
 
 ```ts
-import { defineFilm, validateFilm } from '@wibus/cuelens';
+import { defineSequence, validateSequence } from '@wibus/cuelens';
 
-export const tour = defineFilm({
+export const tour = defineSequence({
   duration: 12,
   tracks: {
     visibleRows: [
@@ -118,7 +118,7 @@ export const tour = defineFilm({
   ],
 });
 
-const issues = validateFilm(tour);
+const issues = validateSequence(tour);
 if (issues.length > 0) {
   throw new Error(issues.map((issue) => `${issue.path}: ${issue.message}`).join('\n'));
 }
@@ -128,54 +128,54 @@ Keyframe easing describes the segment entering that keyframe. The runtime ships
 named easing functions such as `linear`, `easeInCubic`, `easeOutCubic`, and
 `easeInOutCubic`; the emitted declarations list the complete `EasingName` union.
 
-`frameAt(tour, time)` clamps time into the film and returns `time`, `progress`,
+`frameAt(tour, time)` clamps time into the sequence and returns `time`, `progress`,
 all interpolated track `values`, the active `beat`, its index, and its `shot`.
 Use it outside React or when reconstructing state after a seek.
 
 ## Mount the automatic React runtime
 
 ```tsx
-import { filmAnchorProps } from '@wibus/cuelens';
+import { cameraAnchorProps } from '@wibus/cuelens';
 import {
-  FilmProvider,
-  useFilmCamera,
-  useFilmClock,
-  useFilmClockSnapshot,
-  useFilmCues,
-  useFilmFrame,
+  SequenceProvider,
+  useSequenceCamera,
+  useSequenceClock,
+  useSequenceClockSnapshot,
+  useSequenceCues,
+  useSequenceFrame,
 } from '@wibus/cuelens/react';
 import { useRef } from 'react';
 import { tour } from './tour';
 
-export function ProductFilm() {
+export function ProductSequence() {
   return (
-    <FilmProvider
+    <SequenceProvider
       definition={tour}
       autoPlay={false}
       loop={false}
       playbackRate={1}
       onComplete={() => console.log('finished')}
     >
-      <FilmStage />
-    </FilmProvider>
+      <SequenceStage />
+    </SequenceProvider>
   );
 }
 
-function FilmStage() {
+function SequenceStage() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const clock = useFilmClock();
-  const snapshot = useFilmClockSnapshot();
-  const frame = useFilmFrame();
+  const clock = useSequenceClock();
+  const snapshot = useSequenceClockSnapshot();
+  const frame = useSequenceFrame();
 
-  useFilmCamera({
+  useSequenceCamera({
     viewportRef,
     stageRef,
     fallbackRect: { x: 0, y: 0, width: 1800, height: 1100 },
     hideUntilReady: true,
   });
 
-  useFilmCues({
+  useSequenceCues({
     onCue: (cue) => {
       // Resolve cue.kind through an explicit host allowlist. The runtime does
       // not synthesize clicks, mutate product state, or play sounds itself.
@@ -192,8 +192,8 @@ function FilmStage() {
         <ProductFixture
           visibleRows={Math.floor(frame.values.visibleRows)}
           panelOpen={frame.values.panelOpen > 0.02}
-          windowProps={filmAnchorProps('window')}
-          composerProps={filmAnchorProps('composer')}
+          windowProps={cameraAnchorProps('window')}
+          composerProps={cameraAnchorProps('composer')}
         />
       </div>
 
@@ -215,23 +215,23 @@ function FilmStage() {
 }
 ```
 
-`FilmProvider` creates and owns a clock unless `clock` is supplied. Its default
+`SequenceProvider` creates and owns a clock unless `clock` is supplied. Its default
 is `autoPlay: true`; set `autoPlay={false}` when the host presents an explicit
 start control. An externally created clock lets non-React code coordinate the
 same playback. The provider does not destroy an external clock.
 
-`useFilmClockSnapshot()` and `useFilmFrame()` subscribe to every clock tick.
-Keep them in a small conductor. `useFilmClock()` only returns the stable control
+`useSequenceClockSnapshot()` and `useSequenceFrame()` subscribe to every clock tick.
+Keep them in a small conductor. `useSequenceClock()` only returns the stable control
 object and does not itself subscribe.
 
 ## Drive host-controlled steps
 
 ```tsx
-import { defineFilmSteps, validateFilmSteps } from '@wibus/cuelens';
-import { FilmStepProvider, useFilmStep, useFilmStepCamera } from '@wibus/cuelens/react';
+import { defineSequenceSteps, validateSequenceSteps } from '@wibus/cuelens';
+import { SequenceStepProvider, useSequenceStep, useSequenceStepCamera } from '@wibus/cuelens/react';
 import { useRef } from 'react';
 
-const onboarding = defineFilmSteps({
+const onboarding = defineSequenceSteps({
   steps: [
     {
       id: 'welcome',
@@ -251,15 +251,15 @@ const onboarding = defineFilmSteps({
   ],
 });
 
-const issues = validateFilmSteps(onboarding);
+const issues = validateSequenceSteps(onboarding);
 if (issues.length > 0) throw new Error(issues.map((issue) => issue.message).join('\n'));
 
 function OnboardingStage() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const step = useFilmStep();
+  const step = useSequenceStep();
 
-  useFilmStepCamera({
+  useSequenceStepCamera({
     viewportRef,
     stageRef,
     fallbackRect: { x: 0, y: 0, width: 1800, height: 1100 },
@@ -285,41 +285,41 @@ function OnboardingStage() {
 
 export function Onboarding() {
   return (
-    <FilmStepProvider definition={onboarding} initialStep="welcome">
+    <SequenceStepProvider definition={onboarding} initialStep="welcome">
       <OnboardingStage />
-    </FilmStepProvider>
+    </SequenceStepProvider>
   );
 }
 ```
 
 `next()`, `previous()`, `goTo()`, and `reset()` return `true` only when they
 change the active step. The snapshot also exposes `index`, `direction`,
-transition `reason`, and `revision`. Use `createFilmStepController()` or pass an
-external `controller` to `FilmStepProvider` when navigation must live outside
+transition `reason`, and `revision`. Use `createSequenceStepController()` or pass an
+external `controller` to `SequenceStepProvider` when navigation must live outside
 React.
 
 ## Mark and resolve camera anchors
 
-Mark an existing node with `filmAnchorProps()` so its semantics and layout do
+Mark an existing node with `cameraAnchorProps()` so its semantics and layout do
 not change:
 
 ```tsx
-<section {...filmAnchorProps('side-panel')}>...</section>
+<section {...cameraAnchorProps('side-panel')}>...</section>
 ```
 
-`FilmAnchor` is a convenience `div` from the React entry. Use it only when an
+`CameraAnchor` is a convenience `div` from the React entry. Use it only when an
 extra wrapper is semantically and visually harmless:
 
 ```tsx
-<FilmAnchor anchor="composer">...</FilmAnchor>
+<CameraAnchor anchor="composer">...</CameraAnchor>
 ```
 
-The default resolver searches the stage for an exact `data-film-anchor` value.
+The default resolver searches the stage for an exact `data-cuelens-anchor` value.
 Dynamic lists, portals, or product-owned identity attributes can use a custom
 resolver. Return `null` to fall back to the default marker search:
 
 ```tsx
-const camera = useFilmCamera({
+const camera = useSequenceCamera({
   viewportRef,
   stageRef,
   resolveAnchor: (stage, anchor) => {
@@ -375,15 +375,15 @@ Shot controls are:
 
 ## Cue, seek, restart, and loop semantics
 
-`useFilmCues()` and `createCueController()` implement event crossing, not state
+`useSequenceCues()` and `createCueController()` implement event crossing, not state
 reconstruction:
 
 - Natural playback fires a cue once when the playhead crosses it.
 - Forward seek does not fire crossed cues.
 - Backward seek re-arms cues after the destination.
 - Restart re-arms every cue but does not fire one until playback crosses it.
-- A looping tick fires end-of-film cues before clearing the fired set and then
-  fires start-of-film cues.
+- A looping tick fires end-of-sequence cues before clearing the fired set and
+  then fires start-of-sequence cues.
 - Play, pause, and playback-rate changes do not fire cues by themselves.
 
 This prevents a scrub from clicking five controls or playing five sounds in a
@@ -399,13 +399,13 @@ node.
 
 ## Validation and authoring failures
 
-Run `validateFilm()` or `validateFilmSteps()` before mounting authored data.
+Run `validateSequence()` or `validateSequenceSteps()` before mounting authored data.
 Validation returns path-addressed issues; it does not throw or repair input.
 Automatic validation covers duration, ordering, time ranges, duplicate IDs,
 track bounds, and cue lead time. Step validation covers empty definitions,
 empty IDs, and duplicate IDs.
 
-`defineFilm()` and `defineFilmSteps()` are compile-time literal-preserving
+`defineSequence()` and `defineSequenceSteps()` are compile-time literal-preserving
 helpers, not runtime validators. A JSON editor should parse into a draft, run
 structural checks and the package validator, and replace the live definition
 only when every check succeeds. Keep the last valid definition mounted while an
@@ -417,12 +417,12 @@ an authoring lab, not a runtime export.
 
 ## Performance and host ownership
 
-`useFilmFrame()` renders its caller on every clock tick. Keep that hook in a
+`useSequenceFrame()` renders its caller on every clock tick. Keep that hook in a
 small conductor and quantize values before passing them into a large product
 tree:
 
 ```ts
-const frame = useFilmFrame();
+const frame = useSequenceFrame();
 const productState = {
   visibleRows: Math.floor(frame.values.visibleRows),
   panelOpen: frame.values.panelOpen > 0.02,
@@ -441,11 +441,11 @@ connects to product backends or user data by itself.
 
 ## Deterministic clock tests
 
-Inject a `FrameDriver` into `createFilmClock()` so tests control time without
+Inject a `FrameDriver` into `createSequenceClock()` so tests control time without
 sleeping or depending on scheduler timing:
 
 ```ts
-import { createFilmClock, type FrameDriver } from '@wibus/cuelens';
+import { createSequenceClock, type FrameDriver } from '@wibus/cuelens';
 
 function createTestDriver() {
   let now = 0;
@@ -474,7 +474,7 @@ function createTestDriver() {
 }
 
 const test = createTestDriver();
-const clock = createFilmClock({ duration: 2, autoPlay: false, driver: test.driver });
+const clock = createSequenceClock({ duration: 2, autoPlay: false, driver: test.driver });
 
 clock.play();
 test.step(0); // Establish the first frame timestamp.

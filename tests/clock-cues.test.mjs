@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { createCueController, createFilmClock } from '../src/index.ts';
+import { createCueController, createSequenceClock } from '../src/index.ts';
 
 class FakeFrameDriver {
   nowValue = 0;
@@ -31,7 +31,7 @@ describe('Cuelens clock', () => {
   it('plays, pauses, seeks, changes rate, and completes deterministically', () => {
     const driver = new FakeFrameDriver();
     let completions = 0;
-    const clock = createFilmClock({
+    const clock = createSequenceClock({
       duration: 2,
       autoPlay: false,
       driver,
@@ -62,7 +62,7 @@ describe('Cuelens clock', () => {
 
   it('loops through the end without losing overflow time', () => {
     const driver = new FakeFrameDriver();
-    const clock = createFilmClock({ duration: 1, autoPlay: true, loop: true, driver });
+    const clock = createSequenceClock({ duration: 1, autoPlay: true, loop: true, driver });
     driver.step(0);
     driver.step(1250);
     assert.equal(clock.getSnapshot().time, 0.25);
@@ -74,7 +74,7 @@ describe('Cuelens clock', () => {
 describe('Cuelens cues', () => {
   it('fires on natural crossings, stays silent on forward seek, and rearms on rewind', () => {
     const driver = new FakeFrameDriver();
-    const clock = createFilmClock({ duration: 1, autoPlay: false, driver });
+    const clock = createSequenceClock({ duration: 1, autoPlay: false, driver });
     const fired = [];
     const cues = [
       { id: 'first', at: 0.25, anchor: 'one' },
@@ -107,7 +107,7 @@ describe('Cuelens cues', () => {
 
   it('fires end cues before start cues when natural playback wraps', () => {
     const driver = new FakeFrameDriver();
-    const clock = createFilmClock({ duration: 1, autoPlay: false, loop: true, driver });
+    const clock = createSequenceClock({ duration: 1, autoPlay: false, loop: true, driver });
     const fired = [];
     const controller = createCueController({
       clock,

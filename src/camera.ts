@@ -1,4 +1,4 @@
-export const FILM_ANCHOR_ATTRIBUTE = 'data-film-anchor';
+export const CUELENS_ANCHOR_ATTRIBUTE = 'data-cuelens-anchor';
 
 export type CameraShot<Anchor extends string = string> = {
   anchor: Anchor;
@@ -48,27 +48,27 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-export function filmAnchorProps<Anchor extends string>(
+export function cameraAnchorProps<Anchor extends string>(
   anchor: Anchor
-): { [FILM_ANCHOR_ATTRIBUTE]: Anchor } {
-  return { [FILM_ANCHOR_ATTRIBUTE]: anchor };
+): { [CUELENS_ANCHOR_ATTRIBUTE]: Anchor } {
+  return { [CUELENS_ANCHOR_ATTRIBUTE]: anchor };
 }
 
-export function resolveFilmAnchor<Anchor extends string>(
+export function resolveCameraAnchor<Anchor extends string>(
   stage: HTMLElement,
   anchor: Anchor,
   customResolver?: AnchorResolver<Anchor>
 ): HTMLElement | null {
   const custom = customResolver?.(stage, anchor);
   if (custom) return custom;
-  for (const node of stage.querySelectorAll<HTMLElement>(`[${FILM_ANCHOR_ATTRIBUTE}]`)) {
-    if (node.getAttribute(FILM_ANCHOR_ATTRIBUTE) === anchor) return node;
+  for (const node of stage.querySelectorAll<HTMLElement>(`[${CUELENS_ANCHOR_ATTRIBUTE}]`)) {
+    if (node.getAttribute(CUELENS_ANCHOR_ATTRIBUTE) === anchor) return node;
   }
   return null;
 }
 
 /** Convert post-transform DOM geometry back into the stage's coordinate space. */
-export function measureFilmAnchor(
+export function measureCameraAnchor(
   stage: HTMLElement,
   anchorNode: HTMLElement,
   appliedScale: number

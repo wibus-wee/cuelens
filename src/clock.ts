@@ -1,4 +1,4 @@
-export type FilmClockSnapshot = {
+export type SequenceClockSnapshot = {
   time: number;
   duration: number;
   playing: boolean;
@@ -6,12 +6,12 @@ export type FilmClockSnapshot = {
   revision: number;
 };
 
-export type FilmClockTransitionReason = 'tick' | 'play' | 'pause' | 'seek' | 'restart' | 'rate';
+export type SequenceClockTransitionReason = 'tick' | 'play' | 'pause' | 'seek' | 'restart' | 'rate';
 
-export type FilmClockTransition = {
-  reason: FilmClockTransitionReason;
-  previous: FilmClockSnapshot;
-  current: FilmClockSnapshot;
+export type SequenceClockTransition = {
+  reason: SequenceClockTransitionReason;
+  previous: SequenceClockSnapshot;
+  current: SequenceClockSnapshot;
   wrapped: boolean;
   completed: boolean;
 };
@@ -22,7 +22,7 @@ export type FrameDriver = {
   cancel: (handle: unknown) => void;
 };
 
-export type CreateFilmClockOptions = {
+export type CreateSequenceClockOptions = {
   duration: number;
   autoPlay?: boolean;
   loop?: boolean;
@@ -31,10 +31,10 @@ export type CreateFilmClockOptions = {
   onComplete?: () => void;
 };
 
-export type FilmClock = {
-  getSnapshot: () => FilmClockSnapshot;
+export type SequenceClock = {
+  getSnapshot: () => SequenceClockSnapshot;
   subscribe: (listener: () => void) => () => void;
-  subscribeTransitions: (listener: (transition: FilmClockTransition) => void) => () => void;
+  subscribeTransitions: (listener: (transition: SequenceClockTransition) => void) => () => void;
   play: () => void;
   pause: () => void;
   seek: (time: number) => void;
@@ -58,17 +58,17 @@ function createDefaultFrameDriver(): FrameDriver {
   };
 }
 
-export function createFilmClock(options: CreateFilmClockOptions): FilmClock {
+export function createSequenceClock(options: CreateSequenceClockOptions): SequenceClock {
   if (!Number.isFinite(options.duration) || options.duration < 0) {
-    throw new Error('Film clock duration must be a finite non-negative number.');
+    throw new Error('Sequence clock duration must be a finite non-negative number.');
   }
   const initialRate = options.playbackRate ?? 1;
   assertPlaybackRate(initialRate);
 
   const driver = options.driver ?? createDefaultFrameDriver();
   const listeners = new Set<() => void>();
-  const transitionListeners = new Set<(transition: FilmClockTransition) => void>();
-  let snapshot: FilmClockSnapshot = {
+  const transitionListeners = new Set<(transition: SequenceClockTransition) => void>();
+  let snapshot: SequenceClockSnapshot = {
     time: 0,
     duration: options.duration,
     playing: false,
@@ -81,8 +81,8 @@ export function createFilmClock(options: CreateFilmClockOptions): FilmClock {
   let completed = false;
 
   const publish = (
-    reason: FilmClockTransitionReason,
-    patch: Partial<Omit<FilmClockSnapshot, 'revision'>>,
+    reason: SequenceClockTransitionReason,
+    patch: Partial<Omit<SequenceClockSnapshot, 'revision'>>,
     flags: { wrapped?: boolean; completed?: boolean } = {}
   ): void => {
     if (destroyed) return;
@@ -92,7 +92,7 @@ export function createFilmClock(options: CreateFilmClockOptions): FilmClock {
       ...patch,
       revision: snapshot.revision + 1,
     };
-    const transition: FilmClockTransition = {
+    const transition: SequenceClockTransition = {
       reason,
       previous,
       current: snapshot,
@@ -145,7 +145,7 @@ export function createFilmClock(options: CreateFilmClockOptions): FilmClock {
     scheduleFrame();
   };
 
-  const clock: FilmClock = {
+  const clock: SequenceClock = {
     getSnapshot: () => snapshot,
     subscribe: (listener) => {
       listeners.add(listener);
@@ -200,6 +200,6 @@ export function createFilmClock(options: CreateFilmClockOptions): FilmClock {
 
 function assertPlaybackRate(rate: number): void {
   if (!Number.isFinite(rate) || rate <= 0) {
-    throw new Error('Film clock playback rate must be a finite number greater than zero.');
+    throw new Error('Sequence clock playback rate must be a finite number greater than zero.');
   }
 }

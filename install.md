@@ -47,11 +47,11 @@ only from `@wibus/cuelens`.
 
 ## Choose a runtime mode
 
-| Requirement                                                             | Mode                  | Public entry points                                                             |
-| ----------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------- |
-| Time controls playback, tracks, narration, shots, and cues.             | Automatic timeline    | `defineFilm()`, `FilmProvider`, `useFilmFrame()`, `useFilmCamera()`             |
-| A wizard, form, router, or async workflow controls progression.         | Host-controlled steps | `defineFilmSteps()`, `FilmStepProvider`, `useFilmStep()`, `useFilmStepCamera()` |
-| A non-React host needs clock, cue, interpolation, or camera primitives. | Core only             | `@wibus/cuelens`                                                                |
+| Requirement                                                             | Mode                  | Public entry points                                                                             |
+| ----------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------- |
+| Time controls playback, tracks, narration, shots, and cues.             | Automatic timeline    | `defineSequence()`, `SequenceProvider`, `useSequenceFrame()`, `useSequenceCamera()`             |
+| A wizard, form, router, or async workflow controls progression.         | Host-controlled steps | `defineSequenceSteps()`, `SequenceStepProvider`, `useSequenceStep()`, `useSequenceStepCamera()` |
+| A non-React host needs clock, cue, interpolation, or camera primitives. | Core only             | `@wibus/cuelens`                                                                                |
 
 Do not mount an automatic clock and a step controller to own the same flow.
 
@@ -59,15 +59,15 @@ Do not mount an automatic clock and a step controller to own the same flow.
 
 - Give the camera stage stable authored dimensions and place it inside an
   `overflow: clip` viewport with non-zero dimensions.
-- Mark existing DOM nodes with `filmAnchorProps()` or provide a stable custom
+- Mark existing DOM nodes with `cameraAnchorProps()` or provide a stable custom
   anchor resolver.
 - Use `fallbackRect` when an anchor may mount late or temporarily have no layout
   box.
 - Treat cues as host notifications. Execute only allowlisted commands and
   reconstruct visible state declaratively after seeking.
-- Keep `useFilmFrame()` in a small conductor and quantize values before passing
+- Keep `useSequenceFrame()` in a small conductor and quantize values before passing
   them into a large product tree.
-- Run `validateFilm()` or `validateFilmSteps()` before mounting authored data.
+- Run `validateSequence()` or `validateSequenceSteps()` before mounting authored data.
 
 The complete contracts and examples are in
 [`docs/usage.md`](docs/usage.md) in the repository and
@@ -79,9 +79,9 @@ Confirm that the package resolves through the host toolchain, then run the
 repository's existing checks. A direct core import can be used as a smoke test:
 
 ```ts
-import { defineFilm, frameAt } from '@wibus/cuelens';
+import { defineSequence, frameAt } from '@wibus/cuelens';
 
-const film = defineFilm({
+const sequence = defineSequence({
   duration: 1,
   tracks: {
     opacity: [
@@ -93,7 +93,7 @@ const film = defineFilm({
   cues: [],
 });
 
-console.assert(frameAt(film, 0.5).values.opacity === 0.5);
+console.assert(frameAt(sequence, 0.5).values.opacity === 0.5);
 ```
 
 For React integration, use the complete mounted examples in the Usage guide;

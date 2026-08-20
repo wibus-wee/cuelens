@@ -30,26 +30,26 @@ Install @wibus/cuelens in this project, then read node_modules/@wibus/cuelens/in
 
 ## Choose a mode
 
-| Mode                  | Use it when                                                       | Main API                                                                        |
-| --------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Automatic timeline    | Playback, seeking, tracks, beats, and cues follow one clock.      | `defineFilm()`, `FilmProvider`, `useFilmFrame()`, `useFilmCamera()`             |
-| Host-controlled steps | A wizard, form, or onboarding flow decides when the shot changes. | `defineFilmSteps()`, `FilmStepProvider`, `useFilmStep()`, `useFilmStepCamera()` |
-| Core only             | A non-React host needs timing, cue, or camera primitives.         | Root export only                                                                |
+| Mode                  | Use it when                                                       | Main API                                                                                        |
+| --------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Automatic timeline    | Playback, seeking, tracks, beats, and cues follow one clock.      | `defineSequence()`, `SequenceProvider`, `useSequenceFrame()`, `useSequenceCamera()`             |
+| Host-controlled steps | A wizard, form, or onboarding flow decides when the shot changes. | `defineSequenceSteps()`, `SequenceStepProvider`, `useSequenceStep()`, `useSequenceStepCamera()` |
+| Core only             | A non-React host needs timing, cue, or camera primitives.         | Root export only                                                                                |
 
-## Minimal automatic film
+## Minimal automatic sequence
 
 ```tsx
-import { defineFilm, filmAnchorProps } from '@wibus/cuelens';
+import { defineSequence, cameraAnchorProps } from '@wibus/cuelens';
 import {
-  FilmProvider,
-  useFilmCamera,
-  useFilmClock,
-  useFilmClockSnapshot,
-  useFilmFrame,
+  SequenceProvider,
+  useSequenceCamera,
+  useSequenceClock,
+  useSequenceClockSnapshot,
+  useSequenceFrame,
 } from '@wibus/cuelens/react';
 import { useRef } from 'react';
 
-const film = defineFilm({
+const sequence = defineSequence({
   duration: 8,
   tracks: {
     rows: [
@@ -67,11 +67,11 @@ const film = defineFilm({
 function Stage() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const clock = useFilmClock();
-  const snapshot = useFilmClockSnapshot();
-  const frame = useFilmFrame();
+  const clock = useSequenceClock();
+  const snapshot = useSequenceClockSnapshot();
+  const frame = useSequenceFrame();
 
-  useFilmCamera({
+  useSequenceCamera({
     viewportRef,
     stageRef,
     fallbackRect: { x: 0, y: 0, width: 1600, height: 1000 },
@@ -81,9 +81,9 @@ function Stage() {
   return (
     <div ref={viewportRef} style={{ position: 'relative', overflow: 'clip' }}>
       <div ref={stageRef} style={{ width: 1600, height: 1000 }}>
-        <main {...filmAnchorProps('window')}>
-          <textarea {...filmAnchorProps('composer')} />
-          <button {...filmAnchorProps('send')}>Send</button>
+        <main {...cameraAnchorProps('window')}>
+          <textarea {...cameraAnchorProps('composer')} />
+          <button {...cameraAnchorProps('send')}>Send</button>
           <output>{Math.floor(frame.values.rows)} rows</output>
         </main>
       </div>
@@ -96,9 +96,9 @@ function Stage() {
 
 export function Demo() {
   return (
-    <FilmProvider definition={film} autoPlay={false}>
+    <SequenceProvider definition={sequence} autoPlay={false}>
       <Stage />
-    </FilmProvider>
+    </SequenceProvider>
   );
 }
 ```
