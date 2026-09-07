@@ -44,6 +44,56 @@ import {
   type SequenceStepSnapshot,
 } from './steps.ts';
 import { createDeferredEffectLifetime } from './react-lifecycle.ts';
+import { createCameraFraming } from './camera-framing.ts';
+import {
+  createSequenceTriggerController,
+  type SequenceTrigger,
+  type SequenceTriggerContext,
+  type SequenceTriggerController,
+} from './triggers.ts';
+
+export type SequenceTriggerBindings = Pick<
+  HTMLAttributes<HTMLElement>,
+  'onPointerEnter' | 'onFocus' | 'onClick'
+>;
+
+/** Bind to existing elements; native behavior and business handlers remain host-owned. */
+export function useSequenceTriggers<Trigger extends SequenceTrigger>(options: {
+  triggers: readonly Trigger[];
+  onAction: (action: Trigger['actions'][number], context: SequenceTriggerContext<Trigger>) => void;
+}): SequenceTriggerController<Trigger['id']> & {
+  bind: (id: Trigger['id']) => SequenceTriggerBindings;
+} {
+  const callbackRef = useRef(options.onAction);
+  useBrowserLayoutEffect(() => {
+    callbackRef.current = options.onAction;
+  }, [options.onAction]);
+  const controller = useMemo(
+    () =>
+      createSequenceTriggerController({
+        triggers: options.triggers,
+        onAction: (action, context) => callbackRef.current(action, context),
+      }),
+    [options.triggers]
+  );
+  const bind = useCallback(
+    (id: Trigger['id']): SequenceTriggerBindings => ({
+      onPointerEnter: (event) => {
+        if (!event.defaultPrevented && event.pointerType !== 'touch')
+          controller.trigger(id, 'hover');
+      },
+      onFocus: (event) => {
+        if (!event.defaultPrevented && !event.currentTarget.contains(event.relatedTarget))
+          controller.trigger(id, 'focus');
+      },
+      onClick: (event) => {
+        if (!event.defaultPrevented) controller.trigger(id, 'click');
+      },
+    }),
+    [controller]
+  );
+  return { ...controller, bind };
+}
 
 type SequenceContextValue = {
   clock: SequenceClock;
@@ -229,6 +279,7 @@ export type UseSequenceCameraOptions<Anchor extends string = string> =
   };
 
 type CameraSource = {
+  freezeSubject?: boolean;
   getShot: () => CameraShot<string> | null;
   subscribe: (listener: () => void) => () => void;
   shouldAnimate: () => boolean;
@@ -243,6 +294,7 @@ function useImperativeCamera<Anchor extends string = string>(
 ): { refresh: () => void } {
   const { viewportRef, stageRef, source } = options;
   const startRef = useRef<() => void>(() => undefined);
+  const refreshRef = useRef<() => void>(() => undefined);
   const motionRef = useRef(createCameraMotion());
   const stageNodeRef = useRef<HTMLElement | null>(null);
   const readyRef = useRef(false);
@@ -260,6 +312,7 @@ function useImperativeCamera<Anchor extends string = string>(
   };
 
   useBrowserLayoutEffect(() => {
+    const framing = createCameraFraming(source.freezeSubject ?? false);
     let target = null as ReturnType<typeof cameraTargetFromPose> | null;
     let frameHandle = 0;
     let previousFrameTime: number | null = null;
@@ -294,6 +347,7 @@ function useImperativeCamera<Anchor extends string = string>(
       stageNodeRef.current = stage;
       readyRef.current = false;
       motionRef.current = createCameraMotion();
+      framing.reset();
       target = null;
       previousFrameTime = null;
       if (inputsRef.current.hideUntilReady) {
@@ -320,17 +374,12 @@ function useImperativeCamera<Anchor extends string = string>(
       previousFrameTime = now;
       const shot = source.getShot();
       if (!shot) {
+        framing.reset();
         target = null;
         previousFrameTime = null;
         observeAnchor(null);
         return;
       }
-      const anchorNode = resolveCameraAnchor(
-        stage,
-        shot.anchor as Anchor,
-        inputsRef.current.resolveAnchor
-      );
-      observeAnchor(anchorNode);
       const viewportSize = {
         width: viewport.clientWidth,
         height: viewport.clientHeight,
@@ -339,16 +388,26 @@ function useImperativeCamera<Anchor extends string = string>(
         previousFrameTime = null;
         return;
       }
-      const measuredRect = anchorNode
-        ? measureCameraAnchor(
-            stage,
-            anchorNode,
-            motionRef.current.scale > 0 ? motionRef.current.scale : 1
-          )
-        : null;
       const fallback = inputsRef.current.fallbackRect;
-      const rect =
-        measuredRect ?? (typeof fallback === 'function' ? fallback(stage) : (fallback ?? null));
+      const rect = framing.read(
+        shot,
+        () => {
+          const anchorNode = resolveCameraAnchor(
+            stage,
+            shot.anchor as Anchor,
+            inputsRef.current.resolveAnchor
+          );
+          observeAnchor(anchorNode);
+          return anchorNode
+            ? measureCameraAnchor(
+                stage,
+                anchorNode,
+                motionRef.current.scale > 0 ? motionRef.current.scale : 1
+              )
+            : null;
+        },
+        () => (typeof fallback === 'function' ? fallback(stage) : (fallback ?? null))
+      );
       if (rect) {
         target = cameraTargetFromPose(solveCameraPose(rect, viewportSize, shot), viewportSize);
       }
@@ -367,6 +426,10 @@ function useImperativeCamera<Anchor extends string = string>(
     };
 
     startRef.current = schedule;
+    refreshRef.current = () => {
+      framing.reset();
+      schedule();
+    };
     const unsubscribe = source.subscribe(schedule);
     const viewport = viewportRef.current;
     const stage = stageRef.current;
@@ -399,6 +462,7 @@ function useImperativeCamera<Anchor extends string = string>(
     return () => {
       disposed = true;
       startRef.current = () => undefined;
+      refreshRef.current = () => undefined;
       unsubscribe();
       resizeObserver?.disconnect();
       mutationObserver?.disconnect();
@@ -407,11 +471,10 @@ function useImperativeCamera<Anchor extends string = string>(
     };
   }, [source, stageRef, viewportRef]);
 
-  // Re-measure after every host commit. This catches same-shot product-state
-  // changes without asking callers to thread a dependency list into the hook.
+  // Read new shots after host commits; live sources also re-measure product geometry.
   useBrowserLayoutEffect(() => startRef.current());
 
-  return { refresh: useCallback(() => startRef.current(), []) };
+  return { refresh: useCallback(() => refreshRef.current(), []) };
 }
 
 /**
@@ -452,6 +515,29 @@ export type UseSequenceStepCameraOptions<Anchor extends string = string> =
     viewportRef: RefObject<HTMLElement | null>;
     stageRef: RefObject<HTMLElement | null>;
   };
+
+/** Capture a live subject per shot object; product edits do not retarget the camera. */
+export function useCameraShot<Anchor extends string = string>({
+  shot,
+  ...options
+}: UseSequenceStepCameraOptions<Anchor> & {
+  shot: CameraShot<Anchor> | null;
+}): { refresh: () => void } {
+  const shotRef = useRef<CameraShot<Anchor> | null>(shot);
+  useBrowserLayoutEffect(() => {
+    shotRef.current = shot;
+  }, [shot]);
+  const source = useMemo<CameraSource>(
+    () => ({
+      getShot: () => shotRef.current,
+      freezeSubject: true,
+      subscribe: () => () => undefined,
+      shouldAnimate: () => false,
+    }),
+    []
+  );
+  return useImperativeCamera({ ...options, source });
+}
 
 /** Runs the same camera physics, but changes shots only when the host changes sequence steps. */
 export function useSequenceStepCamera<Anchor extends string = string>({

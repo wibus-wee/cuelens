@@ -30,11 +30,12 @@ Install @wibus/cuelens in this project, then read node_modules/@wibus/cuelens/in
 
 ## Choose a mode
 
-| Mode                  | Use it when                                                       | Main API                                                                                        |
-| --------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Automatic timeline    | Playback, seeking, tracks, beats, and cues follow one clock.      | `defineSequence()`, `SequenceProvider`, `useSequenceFrame()`, `useSequenceCamera()`             |
-| Host-controlled steps | A wizard, form, or onboarding flow decides when the shot changes. | `defineSequenceSteps()`, `SequenceStepProvider`, `useSequenceStep()`, `useSequenceStepCamera()` |
-| Core only             | A non-React host needs timing, cue, or camera primitives.         | Root export only                                                                                |
+| Mode                  | Use it when                                                                               | Main API                                                                                        |
+| --------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Automatic timeline    | Playback, seeking, tracks, beats, and cues follow one clock.                              | `defineSequence()`, `SequenceProvider`, `useSequenceFrame()`, `useSequenceCamera()`             |
+| Host-controlled steps | A wizard, form, or onboarding flow decides when the shot changes.                         | `defineSequenceSteps()`, `SequenceStepProvider`, `useSequenceStep()`, `useSequenceStepCamera()` |
+| Core only             | A non-React host needs timing, cue, or camera primitives.                                 | Root export only                                                                                |
+| Interaction triggers  | Hover, focus, or click drives product actions and camera shots independently of progress. | `defineSequenceTriggers()`, `useSequenceTriggers()`, `useCameraShot()`                          |
 
 ## Minimal automatic sequence
 
@@ -137,7 +138,8 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://127.0.0.1:4173/`. Guided mode exercises host-owned steps, Timeline
+Open `http://127.0.0.1:4173/`. Guided mode exercises host-owned steps and
+[interaction triggers](docs/usage.md#connect-interaction-triggers) alongside independent product UI. Timeline
 mode exercises the automatic runtime, and Studio combines CodeMirror JSON with
 visual tracks, keyframes, beats, shots, cues, validation, and live preview.
 

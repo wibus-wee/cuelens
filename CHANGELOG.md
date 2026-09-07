@@ -6,6 +6,21 @@ series.
 
 ## Unreleased
 
+## 0.2.0 - 2026-09-07
+
+### Added
+
+- Typed interaction triggers with ordered host-owned actions and hover, focus,
+  click, and manual dispatch.
+- React trigger bindings for existing UI elements, independent of sequence steps
+  and playback progress.
+- Host-selected camera shots that capture their target geometry so normal product
+  interaction does not retarget the camera.
+- Interactive Guided playground narration, independent Sidebar and scene controls,
+  and integration documentation.
+
+## 0.1.0 - 2026-08-20
+
 ### Added
 
 - Cuelens package identity under `@wibus/cuelens`.

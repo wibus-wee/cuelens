@@ -9,6 +9,124 @@ function captureBrowserErrors(page: Page): string[] {
   return errors;
 }
 
+async function expectCenteredSubject(page: Page, selector: string) {
+  await expect
+    .poll(async () => {
+      const subject = await page.locator(selector).boundingBox();
+      const viewport = await page.locator('.camera-viewport').boundingBox();
+      if (!subject || !viewport) return Infinity;
+      return Math.max(
+        Math.abs(subject.x + subject.width / 2 - viewport.x - viewport.width / 2),
+        Math.abs(subject.y + subject.height / 2 - viewport.y - viewport.height / 2)
+      );
+    })
+    .toBeLessThan(1);
+}
+
+test('narration drives product and camera while real UI leaves the step untouched', async ({
+  page,
+}) => {
+  const errors = captureBrowserErrors(page);
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.goto('/');
+  await expect(page.getByText('Camera ready')).toBeVisible();
+  const narrative = page.locator('.interaction-narrative');
+  const sidebar = page.getByRole('group', { name: 'Sidebar section' });
+  const stage = page.locator('.film-stage');
+  const progress = page.locator('.guided-experience');
+  const initialTransform = await stage.evaluate((node) => node.style.transform);
+
+  await narrative.getByRole('button', { name: 'Media', exact: true }).hover();
+  await expect(sidebar.getByRole('button', { name: 'Media', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(stage).toHaveAttribute('data-camera-anchor', 'media-content');
+  await expect(page.getByAltText('Open road source footage')).toHaveJSProperty(
+    'naturalWidth',
+    1600
+  );
+  await expect
+    .poll(() => stage.evaluate((node) => node.style.transform))
+    .not.toBe(initialTransform);
+  await expect
+    .poll(async () => {
+      const subject = await page.locator('.media-content').boundingBox();
+      const viewport = await page.locator('.camera-viewport').boundingBox();
+      return Boolean(
+        subject &&
+          viewport &&
+          subject.x >= viewport.x &&
+          subject.y >= viewport.y &&
+          subject.x + subject.width <= viewport.x + viewport.width &&
+          subject.y + subject.height <= viewport.y + viewport.height
+      );
+    })
+    .toBe(true);
+  await expectCenteredSubject(page, '.media-content');
+  await page.screenshot({ path: 'test-results/triggers-desktop.png', fullPage: true });
+
+  await sidebar.getByRole('button', { name: 'Scenes', exact: true }).click();
+  await expect(sidebar.getByRole('button', { name: 'Scenes', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(stage).toHaveAttribute('data-camera-anchor', 'media-content');
+  await expect(progress).toHaveAttribute('data-step-id', 'workspace');
+  await expect(progress).toHaveAttribute('data-step-revision', '0');
+
+  await page.getByRole('button', { name: 'Full workspace' }).click();
+  await page.locator('.scene-row').filter({ hasText: 'Cold open' }).click();
+  await expect(page.locator('.canvas-toolbar')).toContainText('Frame 01');
+  await expect(progress).toHaveAttribute('data-step-revision', '0');
+  await narrative.getByRole('button', { name: 'frame', exact: true }).focus();
+  await expect(stage).toHaveAttribute('data-camera-anchor', 'story-canvas');
+  await expect(page.locator('.canvas-toolbar')).toContainText('Frame 01');
+
+  await narrative.getByRole('button', { name: 'Media', exact: true }).hover();
+  await narrative.getByRole('button', { name: 'Scenes', exact: true }).hover();
+  await narrative.getByRole('button', { name: 'Media', exact: true }).hover();
+  await expect(stage).toHaveAttribute('data-camera-anchor', 'media-content');
+  await expect(progress).toHaveAttribute('data-step-revision', '0');
+  await page.getByRole('button', { name: 'Story frame' }).click();
+  await expect(progress).toHaveAttribute('data-step-id', 'story');
+  await expect(progress).toHaveAttribute('data-step-revision', '1');
+  await expect(stage).toHaveAttribute('data-camera-anchor', 'story-canvas');
+  await expect(sidebar.getByRole('button', { name: 'Scenes', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  expect(errors).toEqual([]);
+});
+
+test('trigger narration works with touch and keyboard in a narrow viewport', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+  });
+  const page = await context.newPage();
+  const errors = captureBrowserErrors(page);
+  await page.goto('http://127.0.0.1:4173');
+  const narrative = page.locator('.interaction-narrative');
+  await narrative.getByRole('button', { name: 'Media', exact: true }).tap();
+  await expect(page.locator('.film-stage')).toHaveAttribute('data-camera-anchor', 'media-content');
+  await expect(page.getByAltText('Open road source footage')).toBeVisible();
+  await narrative.getByRole('button', { name: 'Scenes', exact: true }).focus();
+  await expect(page.locator('.film-stage')).toHaveAttribute('data-camera-anchor', 'sidebar');
+  await expect(page.locator('.guided-experience')).toHaveAttribute('data-step-revision', '0');
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  ).toBeLessThanOrEqual(0);
+  await expect(narrative).toBeInViewport();
+  await expect(page.locator('.camera-frame')).toBeInViewport();
+  await expectCenteredSubject(page, '.scene-sidebar');
+  await page.screenshot({ path: 'test-results/triggers-mobile.png', fullPage: true });
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
 test('guided camera frames live anchors across shots', async ({ page }) => {
   const browserErrors = captureBrowserErrors(page);
   await page.setViewportSize({ width: 1440, height: 960 });

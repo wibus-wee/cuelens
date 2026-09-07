@@ -18,6 +18,8 @@ import {
   createSequenceStepController,
   defineSequence,
   defineSequenceSteps,
+  defineSequenceTriggers,
+  createSequenceTriggerController,
   cameraAnchorProps,
   frameAt,
   validateSequence,
@@ -39,6 +41,8 @@ import {
   useSequenceFrame,
   useSequenceStep,
   useSequenceStepCamera,
+  useSequenceTriggers,
+  useCameraShot,
 } from '@wibus/cuelens/react';
 ```
 
@@ -298,6 +302,129 @@ transition `reason`, and `revision`. Use `createSequenceStepController()` or pas
 external `controller` to `SequenceStepProvider` when navigation must live outside
 React.
 
+## Connect interaction triggers
+
+Triggers dispatch host-owned actions independently of steps and story time.
+Use them for interactive narration: hovering a word can select a real Sidebar
+tab and move the camera, while clicking the Sidebar itself changes only product
+state. Neither interaction changes the step, playhead, or narration selection
+unless the host explicitly calls a navigation API.
+
+Define action payloads for your product and handle them in one callback:
+
+```tsx
+import { defineSequenceTriggers, type CameraShot } from '@wibus/cuelens';
+import { useCameraShot, useSequenceTriggers } from '@wibus/cuelens/react';
+import { useRef, useState } from 'react';
+
+const triggers = defineSequenceTriggers([
+  {
+    id: 'analytics',
+    events: ['hover', 'focus', 'click'],
+    actions: [
+      { type: 'tab', value: 'analytics' },
+      { type: 'camera', shot: { anchor: 'analytics-panel', padding: 64 } },
+    ],
+  },
+  {
+    id: 'overview',
+    events: ['click'],
+    actions: [{ type: 'camera', shot: { anchor: 'window', padding: 40 } }],
+  },
+]);
+
+function InteractiveSidebar() {
+  const [tab, setTab] = useState('marketer');
+  const [shot, setShot] = useState<CameraShot>({ anchor: 'window', padding: 40 });
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const { bind } = useSequenceTriggers({
+    triggers,
+    onAction: (action) => {
+      if (action.type === 'tab') setTab(action.value);
+      else setShot({ ...action.shot });
+    },
+  });
+
+  useCameraShot({ viewportRef, stageRef, shot });
+
+  return (
+    <>
+      <p>
+        Measure your work in{' '}
+        <button type="button" {...bind('analytics')}>
+          Analytics
+        </button>
+        .
+      </p>
+      <button type="button" {...bind('overview')}>
+        Overview
+      </button>
+      <div ref={viewportRef} style={{ position: 'relative', height: 480, overflow: 'clip' }}>
+        <div ref={stageRef} style={{ width: 1200, height: 800 }}>
+          <section data-cuelens-anchor="window">
+            <button type="button" onClick={() => setTab('marketer')}>
+              AI Marketer
+            </button>
+            <button type="button" onClick={() => setTab('analytics')}>
+              Analytics
+            </button>
+            {tab === 'analytics' ? (
+              <section data-cuelens-anchor="analytics-panel">Analytics content</section>
+            ) : (
+              <section>AI Marketer content</section>
+            )}
+          </section>
+        </div>
+      </div>
+    </>
+  );
+}
+```
+
+`useSequenceTriggers()` needs no provider. `bind(id)` supplies `onPointerEnter`,
+`onFocus`, and `onClick`; each dispatches only when the trigger declares that
+event. Hover ignores touch pointers, focus ignores movement between descendants,
+and prevented events are skipped. Use native buttons for keyboard and touch
+activation. Binding does not prevent defaults, stop propagation, synthesize
+clicks, or install global DOM listeners. When an element already has a handler,
+compose it explicitly with the binding rather than overwriting either handler.
+
+Each matching event runs the action list again, in order. Focus followed by click
+can therefore dispatch twice; selection and camera actions should be idempotent.
+Leaving a trigger does not restore previous state. There is no active-trigger
+state or reverse subscription to the product. The hook uses the latest committed
+action callback and replaces its controller when the trigger list changes.
+
+`trigger(id)` dispatches explicitly regardless of configured events. Outside React,
+use `createSequenceTriggerController({ triggers, onAction })`; its optional second
+`trigger(id, event)` argument filters by event and returns `false` when excluded.
+Empty or duplicate IDs throw during controller creation; an unknown ID throws
+when dispatched. Actions execute synchronously. A thrown callback stops the list
+and propagates to the caller, without undoing earlier actions. Async work and
+cancellation belong to the host; the controller does not await promises.
+
+`useCameraShot({ shot, ...cameraOptions })` accepts a host-selected shot without a
+provider and shares the existing camera physics and lifecycle. Use it in place of
+the step or timeline camera hook for that stage when interactions can select shots.
+It measures after the host commits UI changes and snapshots the first valid live
+anchor rectangle for that shot. Later product interactions can move or remove
+the anchor without changing the camera destination. Existing camera motion may
+finish settling; viewport resizing still fits the captured rectangle.
+
+Pass a new shot object for each camera action, including repeated actions on the
+same anchor, or call `camera.refresh()` to explicitly measure again. A fallback
+is provisional until a late anchor mounts; after that, removing the anchor does
+not switch back to fallback. `shot: null` stops targeting and preserves the
+current transform. Timeline and step camera hooks continue following live DOM
+geometry.
+
+For a guided flow, keep mutable product state separate from `step.step.state`.
+Apply the authored state and shot on an actual step transition, then let product
+handlers and trigger actions update local state. Do not continuously project the
+step state over those edits. The [Guided playground](https://github.com/wibus-wee/cuelens/blob/main/playground/src/app.tsx)
+demonstrates this boundary, including a camera-only action.
+
 ## Mark and resolve camera anchors
 
 Mark an existing node with `cameraAnchorProps()` so its semantics and layout do
@@ -352,7 +479,7 @@ The viewport and stage form a strict contract:
 - Supply `fallbackRect` when the current anchor may mount late or temporarily
   have a zero-size layout box.
 
-Both React camera hooks calculate the first valid pose during browser layout.
+All React camera hooks calculate the first valid pose during browser layout.
 `hideUntilReady` conceals the stage until that transform is applied, then
 restores its previous inline visibility. `onReady(pose)` runs once for each
 newly mounted stage after its first valid pose.

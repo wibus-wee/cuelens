@@ -4,6 +4,7 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -34,19 +35,21 @@ import {
 import {
   defineSequence,
   defineSequenceSteps,
+  defineSequenceTriggers,
   cameraAnchorProps,
   type CameraShot,
 } from '@wibus/cuelens';
 import {
   SequenceProvider,
   SequenceStepProvider,
+  useCameraShot,
   useSequenceCamera,
   useSequenceClock,
   useSequenceClockSnapshot,
   useSequenceCues,
   useSequenceFrame,
   useSequenceStep,
-  useSequenceStepCamera,
+  useSequenceTriggers,
 } from '@wibus/cuelens/react';
 
 const StudioPlayground = lazy(() =>
@@ -60,8 +63,10 @@ const FALLBACK_RECT = { x: 120, y: 68, width: 1200, height: 764 };
 type ViewportPreset = 'desktop' | 'tablet' | 'phone';
 type PlaygroundMode = 'guided' | 'timeline' | 'studio';
 type DeliveryStatus = 'drafting' | 'review' | 'ready';
+type SidebarTab = 'scenes' | 'media';
 
 type ProductState = {
+  sidebarTab?: SidebarTab;
   activeScene: number;
   comments: number;
   progress: number;
@@ -312,8 +317,67 @@ function GuidedPlayground({
   debug: boolean;
 }) {
   const step = useSequenceStep();
-  const state = (step.step.state ?? DEFAULT_PRODUCT_STATE) as ProductState;
-  const shot = step.step.shot as CameraShot;
+  const [product, setProduct] = useState(() => ({
+    revision: step.revision,
+    state: (step.step.state ?? DEFAULT_PRODUCT_STATE) as ProductState,
+    shot: step.step.shot as CameraShot,
+  }));
+  // Only navigation reapplies the authored projection. Product actions never navigate.
+  if (product.revision !== step.revision) {
+    setProduct({
+      revision: step.revision,
+      state: (step.step.state ?? DEFAULT_PRODUCT_STATE) as ProductState,
+      shot: step.step.shot as CameraShot,
+    });
+  }
+  const { state, shot } = product;
+  const triggers = useMemo(
+    () =>
+      defineSequenceTriggers([
+        {
+          id: 'scenes',
+          events: ['hover', 'focus', 'click'],
+          actions: [
+            { type: 'sidebar', tab: 'scenes' },
+            { type: 'camera', shot: { anchor: 'sidebar', padding: 52, maxScale: 1.2 } },
+          ],
+        },
+        {
+          id: 'media',
+          events: ['hover', 'focus', 'click'],
+          actions: [
+            { type: 'sidebar', tab: 'media' },
+            { type: 'camera', shot: { anchor: 'media-content', padding: 72, maxScale: 1.4 } },
+          ],
+        },
+        {
+          id: 'frame',
+          events: ['hover', 'focus', 'click'],
+          actions: [
+            { type: 'camera', shot: { anchor: 'story-canvas', padding: 82, maxScale: 1.55 } },
+          ],
+        },
+        {
+          id: 'overview',
+          events: ['click'],
+          actions: [{ type: 'camera', shot: { anchor: 'window', padding: 42, maxScale: 1.1 } }],
+        },
+      ]),
+    []
+  );
+  const { bind } = useSequenceTriggers({
+    triggers,
+    onAction: (action) => {
+      if (action.type === 'sidebar') {
+        setProduct((current) => ({
+          ...current,
+          state: { ...current.state, sidebarTab: action.tab },
+        }));
+      } else {
+        setProduct((current) => ({ ...current, shot: { ...action.shot } }));
+      }
+    },
+  });
   const metadata = step.step.metadata as { label: string; note: string };
 
   return (
@@ -343,7 +407,56 @@ function GuidedPlayground({
         />
       }
     >
-      <GuidedCameraViewport viewport={viewport} state={state} shot={shot} debug={debug} />
+      <div
+        className="guided-experience"
+        data-step-id={step.step.id}
+        data-step-revision={step.revision}
+      >
+        <div className="interaction-narrative">
+          <p>
+            Your story starts with{' '}
+            <button type="button" {...bind('scenes')}>
+              Scenes
+            </button>
+            . Find the next shot in{' '}
+            <button type="button" {...bind('media')}>
+              Media
+            </button>
+            , then bring it into the{' '}
+            <button type="button" {...bind('frame')}>
+              frame
+            </button>
+            .
+          </p>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Full workspace"
+            title="Full workspace"
+            {...bind('overview')}
+          >
+            <Crosshair size={16} />
+          </button>
+        </div>
+        <GuidedCameraViewport
+          viewport={viewport}
+          state={state}
+          shot={shot}
+          debug={debug}
+          onSidebarTabChange={(sidebarTab) =>
+            setProduct((current) => ({
+              ...current,
+              state: { ...current.state, sidebarTab },
+            }))
+          }
+          onSceneSelect={(activeScene) =>
+            setProduct((current) => ({
+              ...current,
+              state: { ...current.state, activeScene },
+            }))
+          }
+        />
+      </div>
     </PlaygroundWorkspace>
   );
 }
@@ -439,17 +552,22 @@ function GuidedCameraViewport({
   state,
   shot,
   debug,
+  onSidebarTabChange,
+  onSceneSelect,
 }: {
   viewport: (typeof viewportPresets)[ViewportPreset];
   state: ProductState;
   shot: CameraShot;
   debug: boolean;
+  onSidebarTabChange: (tab: SidebarTab) => void;
+  onSceneSelect: (index: number) => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
   const onReady = useCallback(() => setReady(true), []);
-  const camera = useSequenceStepCamera({
+  const camera = useCameraShot({
+    shot,
     viewportRef,
     stageRef,
     fallbackRect: FALLBACK_RECT,
@@ -460,7 +578,14 @@ function GuidedCameraViewport({
   return (
     <CameraFrame viewport={viewport} ready={ready} onRefresh={camera.refresh}>
       <div ref={viewportRef} className="camera-viewport">
-        <ProductStage ref={stageRef} state={state} activeAnchor={shot.anchor} debug={debug} />
+        <ProductStage
+          ref={stageRef}
+          state={state}
+          activeAnchor={shot.anchor}
+          debug={debug}
+          onSidebarTabChange={onSidebarTabChange}
+          onSceneSelect={onSceneSelect}
+        />
       </div>
     </CameraFrame>
   );
@@ -539,8 +664,11 @@ const ProductStage = forwardRef<
     state: ProductState;
     activeAnchor: string;
     debug: boolean;
+    onSidebarTabChange?: (tab: SidebarTab) => void;
+    onSceneSelect?: (index: number) => void;
   }
->(function ProductStage({ state, activeAnchor, debug }, ref) {
+>(function ProductStage({ state, activeAnchor, debug, onSidebarTabChange, onSceneSelect }, ref) {
+  const sidebarTab = state.sidebarTab ?? 'scenes';
   const anchor = (name: string) => ({
     ...cameraAnchorProps(name),
     'data-anchor-label': name,
@@ -551,6 +679,7 @@ const ProductStage = forwardRef<
     <div
       ref={ref}
       className="film-stage"
+      data-camera-anchor={activeAnchor}
       data-debug-anchors={debug ? 'true' : undefined}
       style={{ width: STAGE_WIDTH, height: STAGE_HEIGHT }}
     >
@@ -585,32 +714,59 @@ const ProductStage = forwardRef<
         <div className="product-body">
           <aside className="scene-sidebar" {...anchor('sidebar')}>
             <div className="section-heading">
-              <span>Scenes</span>
+              <div className="product-sidebar-tabs" role="group" aria-label="Sidebar section">
+                {(['scenes', 'media'] as const).map((tab) => (
+                  <button
+                    type="button"
+                    key={tab}
+                    aria-pressed={sidebarTab === tab}
+                    disabled={!onSidebarTabChange}
+                    onClick={() => onSidebarTabChange?.(tab)}
+                  >
+                    {tab === 'scenes' ? 'Scenes' : 'Media'}
+                  </button>
+                ))}
+              </div>
               <button type="button" aria-label="Scene options" title="Scene options">
                 <MoreHorizontal size={16} />
               </button>
             </div>
-            <div className="scene-list">
-              {scenes.map((scene, index) => (
-                <button
-                  className="scene-row"
-                  data-active={state.activeScene === index ? 'true' : undefined}
-                  key={scene.id}
-                  type="button"
-                >
-                  <span className="scene-number">{scene.id}</span>
-                  <span className="scene-thumb" data-tone={scene.tone}>
-                    {scene.tone === 'photo' ? (
-                      <img src="/storyboard-road.jpg" alt="Desert road between red rock cliffs" />
-                    ) : null}
-                  </span>
-                  <span className="scene-copy">
-                    <strong>{scene.name}</strong>
-                    <small>{scene.time}</small>
-                  </span>
-                </button>
-              ))}
-            </div>
+            {sidebarTab === 'scenes' ? (
+              <div className="scene-list">
+                {scenes.map((scene, index) => (
+                  <button
+                    className="scene-row"
+                    data-active={state.activeScene === index ? 'true' : undefined}
+                    key={scene.id}
+                    type="button"
+                    aria-pressed={state.activeScene === index}
+                    onClick={() => onSceneSelect?.(index)}
+                  >
+                    <span className="scene-number">{scene.id}</span>
+                    <span className="scene-thumb" data-tone={scene.tone}>
+                      {scene.tone === 'photo' ? (
+                        <img src="/storyboard-road.jpg" alt="Desert road between red rock cliffs" />
+                      ) : null}
+                    </span>
+                    <span className="scene-copy">
+                      <strong>{scene.name}</strong>
+                      <small>{scene.time}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="media-content" {...anchor('media-content')}>
+                <img src="/storyboard-road.jpg" alt="Open road source footage" />
+                <strong>Open road</strong>
+                <span>Source footage · 00:14</span>
+                <div className="media-file">
+                  <Layers3 size={16} />
+                  <span>Campaign assets</span>
+                  <small>24 files</small>
+                </div>
+              </div>
+            )}
             <div className="media-bin">
               <Layers3 size={15} />
               <span>Media</span>
@@ -620,7 +776,7 @@ const ProductStage = forwardRef<
 
           <section className="edit-surface">
             <div className="canvas-toolbar">
-              <span>Frame 03</span>
+              <span>Frame {String(state.activeScene + 1).padStart(2, '0')}</span>
               <div className="canvas-zoom">
                 <span>Fit</span>
                 <span>82%</span>
