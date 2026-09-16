@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { defineSequence, evaluateTrack, frameAt, validateSequence } from '../src/index.ts';
+import {
+  defineSequence,
+  evaluateCameraKeyframes,
+  evaluateTrack,
+  frameAt,
+  validateSequence,
+} from '../src/index.ts';
 
 const sequence = defineSequence({
   duration: 4,
@@ -67,5 +73,92 @@ describe('Cuelens timeline and sequence', () => {
     assert.equal(codes.has('duplicate-beat-id'), true);
     assert.equal(codes.has('unsorted-beats'), true);
     assert.equal(codes.has('cue-lead-before-start'), true);
+  });
+
+  it('interpolates the camera lane and holds the segment anchor', () => {
+    const lane = [
+      { time: 0, anchor: 'window', yaw: -30, zoom: 1 },
+      { time: 4, anchor: 'panel', yaw: 30, zoom: 2, easing: 'linear' },
+    ];
+    const mid = evaluateCameraKeyframes(lane, 2);
+    assert.equal(mid?.anchor, 'window');
+    assert.equal(mid?.yaw, 0);
+    assert.equal(mid?.zoom, 1.5);
+    assert.equal(evaluateCameraKeyframes(lane, -1)?.yaw, -30);
+    assert.equal(evaluateCameraKeyframes(lane, 4)?.anchor, 'panel');
+    assert.equal(evaluateCameraKeyframes(lane, 9)?.yaw, 30);
+    assert.equal(evaluateCameraKeyframes(undefined, 1), null);
+    assert.equal(evaluateCameraKeyframes([], 1), null);
+  });
+
+  it('cuts to the next anchor exactly at its keyframe', () => {
+    const lane = [
+      { time: 0, anchor: 'a', yaw: 0 },
+      { time: 4, anchor: 'b', yaw: 10 },
+      { time: 8, anchor: 'c', yaw: 20 },
+    ];
+    assert.equal(evaluateCameraKeyframes(lane, 3.999)?.anchor, 'a');
+    assert.equal(evaluateCameraKeyframes(lane, 4)?.anchor, 'b');
+    assert.equal(evaluateCameraKeyframes(lane, 4)?.yaw, 10);
+  });
+
+  it('blends perspective in focal-power space so lens distance never dips', () => {
+    const lane = [
+      { time: 0, anchor: 'a', yaw: 8, perspective: 1100 },
+      { time: 8, anchor: 'a', yaw: 0, perspective: 0, easing: 'linear' },
+    ];
+    for (const time of [1, 2, 4, 6, 7, 7.9]) {
+      const shot = evaluateCameraKeyframes(lane, time);
+      assert.ok(
+        shot.perspective === 0 || shot.perspective >= 1100,
+        `t=${time} emitted unsafe perspective ${shot.perspective}`
+      );
+    }
+    assert.equal(evaluateCameraKeyframes(lane, 8)?.perspective, 0);
+    // Finite endpoints stay between the authored values.
+    const shift = evaluateCameraKeyframes(
+      [
+        { time: 0, anchor: 'a', perspective: 800 },
+        { time: 4, anchor: 'a', perspective: 1600, easing: 'linear' },
+      ],
+      2
+    );
+    assert.ok(shift.perspective > 800 && shift.perspective < 1600);
+  });
+
+  it('lets the camera lane override beat shots in derived frames', () => {
+    const orbiting = defineSequence({
+      duration: 4,
+      tracks: {},
+      beats: [{ id: 'only', at: 0, shot: { anchor: 'window' } }],
+      cues: [],
+      camera: [
+        { time: 0, anchor: 'window', yaw: -20 },
+        { time: 4, anchor: 'panel', yaw: 20 },
+      ],
+    });
+    const frame = frameAt(orbiting, 2);
+    assert.equal(frame.shot?.yaw, 0);
+    assert.equal(frame.shot?.anchor, 'window');
+    // Without a camera lane the beat shot still wins.
+    assert.equal(frameAt(sequence, 2.5).shot?.anchor, 'button');
+  });
+
+  it('validates camera lane ordering, range, and anchors', () => {
+    const issues = validateSequence({
+      duration: 2,
+      tracks: {},
+      beats: [],
+      cues: [],
+      camera: [
+        { time: 1.5, anchor: 'panel' },
+        { time: 1, anchor: '' },
+        { time: 3, anchor: 'window' },
+      ],
+    });
+    const codes = new Set(issues.map((issue) => issue.code));
+    assert.equal(codes.has('unsorted-camera-keys'), true);
+    assert.equal(codes.has('invalid-camera-key'), true);
+    assert.equal(codes.has('camera-key-out-of-range'), true);
   });
 });

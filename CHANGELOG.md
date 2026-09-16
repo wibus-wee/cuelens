@@ -6,6 +6,20 @@ series.
 
 ## Unreleased
 
+### Added
+
+- Camera orientation on shots: `yaw`, `pitch`, and `roll` in degrees plus an
+  explicit `perspective` lens, integrated by the same spring physics as position.
+- A definition-level `camera` lane of shot keyframes that interpolate inside a
+  beat for continuous orbits, drifts, and push-ins.
+- Depth layers through `cameraLayerProps()`, the `<CameraLayer>` React wrapper,
+  `preserve3dProps()` for intermediate wrappers, and the `depthLayers` camera
+  option that keeps `preserve-3d` on the stage.
+- Layout-space anchor measurement while the camera is rotated, so spatial poses
+  never chase their own projected geometry.
+- Studio camera lane authoring with a dedicated timeline lane, keyframe
+  inspector, and angle/perspective sliders.
+
 ## 0.2.0 - 2026-09-07
 
 ### Added

@@ -12,6 +12,7 @@ import {
   Crosshair,
   ListVideo,
   MousePointerClick,
+  Orbit,
   Pause,
   Play,
   Plus,
@@ -22,10 +23,12 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   EASINGS,
+  cameraLayerProps,
   evaluateTrack,
   solveCameraPose,
   validateSequence,
   type AnySequenceDefinition,
+  type CameraKeyframe,
   type CameraShot,
   type SequenceValidationIssue,
   type Rect,
@@ -76,13 +79,74 @@ const DEFAULT_STUDIO_SOURCE = `{
       "id": "resolver",
       "at": 4,
       "title": "Custom resolver",
-      "shot": { "anchor": "virtual-focus", "padding": 72, "maxScale": 1.8, "focusX": 0.54 }
+      "shot": {
+        "anchor": "virtual-focus",
+        "padding": 72,
+        "maxScale": 1.8,
+        "focusX": 0.54,
+        "yaw": -16,
+        "pitch": 6,
+        "perspective": 1400
+      }
     },
     {
       "id": "fallback",
       "at": 8,
       "title": "Function fallback",
       "shot": { "anchor": "missing-anchor", "padding": 84, "maxScale": 2, "focusY": 0.46 }
+    }
+  ],
+  "camera": [
+    { "time": 0, "anchor": "studio-canvas", "padding": 44, "maxScale": 1.1, "perspective": 0 },
+    {
+      "time": 3,
+      "anchor": "studio-canvas",
+      "padding": 60,
+      "maxScale": 1.3,
+      "yaw": 9,
+      "pitch": -4,
+      "perspective": 1200,
+      "easing": "easeInOutCubic"
+    },
+    {
+      "time": 4,
+      "anchor": "virtual-focus",
+      "padding": 72,
+      "maxScale": 1.8,
+      "focusX": 0.54,
+      "yaw": -16,
+      "pitch": 6,
+      "perspective": 1400,
+      "easing": "easeOutCubic"
+    },
+    {
+      "time": 7.5,
+      "anchor": "virtual-focus",
+      "padding": 88,
+      "maxScale": 1.7,
+      "yaw": -5,
+      "pitch": 2,
+      "perspective": 1400,
+      "easing": "easeInOutCubic"
+    },
+    {
+      "time": 8,
+      "anchor": "missing-anchor",
+      "padding": 84,
+      "maxScale": 2,
+      "focusY": 0.46,
+      "yaw": 7,
+      "pitch": -3,
+      "perspective": 1100,
+      "easing": "easeOutCubic"
+    },
+    {
+      "time": 12,
+      "anchor": "studio-canvas",
+      "padding": 52,
+      "maxScale": 1.15,
+      "perspective": 0,
+      "easing": "easeInOutCubic"
     }
   ],
   "cues": [
@@ -107,10 +171,11 @@ type RuntimeOptions = {
   autoPlay: boolean;
   loop: boolean;
   resolver: boolean;
+  depthLayers: boolean;
 };
 
 type AuthorMode = 'visual' | 'code';
-type VisualSection = 'tracks' | 'beats' | 'cues';
+type VisualSection = 'tracks' | 'beats' | 'cues' | 'camera';
 
 type MutableKeyframe = {
   time: number;
@@ -134,11 +199,17 @@ type MutableCue = {
   kind?: string;
 };
 
+type MutableCameraKeyframe = CameraShot & {
+  time: number;
+  easing?: string;
+};
+
 type MutableStudioDefinition = {
   duration: number;
   tracks: Record<string, MutableKeyframe[]>;
   beats: MutableBeat[];
   cues: MutableCue[];
+  camera?: MutableCameraKeyframe[];
 };
 
 type StudioSeekRequest = {
@@ -202,6 +273,32 @@ function schemaIssue(path: string, message: string): StudioIssue {
   return { code: 'schema', path, message };
 }
 
+const SHOT_NUMBER_FIELDS = [
+  'padding',
+  'minScale',
+  'maxScale',
+  'zoom',
+  'focusX',
+  'focusY',
+  'yaw',
+  'pitch',
+  'roll',
+  'perspective',
+] as const;
+
+function validateShotSchema(shot: unknown, path: string, issues: StudioIssue[]): void {
+  if (!isRecord(shot) || typeof shot.anchor !== 'string') {
+    issues.push(schemaIssue(path, 'A shot must contain a text anchor.'));
+    return;
+  }
+  for (const field of SHOT_NUMBER_FIELDS) {
+    const value = shot[field];
+    if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value))) {
+      issues.push(schemaIssue(`${path}.${field}`, `Shot ${field} must be a finite number.`));
+    }
+  }
+}
+
 function parseStudioDefinition(source: string): DraftResult {
   let value: unknown;
   try {
@@ -229,6 +326,9 @@ function parseStudioDefinition(source: string): DraftResult {
   if (!isRecord(value.tracks)) issues.push(schemaIssue('tracks', 'Tracks must be an object.'));
   if (!Array.isArray(value.beats)) issues.push(schemaIssue('beats', 'Beats must be an array.'));
   if (!Array.isArray(value.cues)) issues.push(schemaIssue('cues', 'Cues must be an array.'));
+  if (value.camera !== undefined && !Array.isArray(value.camera)) {
+    issues.push(schemaIssue('camera', 'Camera must be an array of keyframes.'));
+  }
   if (issues.length > 0) return { definition: null, issues };
 
   for (const [trackName, keyframes] of Object.entries(value.tracks as Record<string, unknown>)) {
@@ -269,10 +369,26 @@ function parseStudioDefinition(source: string): DraftResult {
       issues.push(schemaIssue(`${path}.at`, 'Beat time must be a finite number.'));
     }
     if (beat.shot !== undefined) {
-      if (!isRecord(beat.shot) || typeof beat.shot.anchor !== 'string') {
-        issues.push(schemaIssue(`${path}.shot`, 'A shot must contain a text anchor.'));
-      }
+      validateShotSchema(beat.shot, `${path}.shot`, issues);
     }
+  });
+
+  ((value.camera ?? []) as unknown[]).forEach((keyframe, index) => {
+    const path = `camera.${index}`;
+    if (!isRecord(keyframe)) {
+      issues.push(schemaIssue(path, 'A camera keyframe must be an object.'));
+      return;
+    }
+    if (typeof keyframe.time !== 'number' || !Number.isFinite(keyframe.time)) {
+      issues.push(schemaIssue(`${path}.time`, 'Keyframe time must be a finite number.'));
+    }
+    if (
+      keyframe.easing !== undefined &&
+      (typeof keyframe.easing !== 'string' || !EASING_NAMES.has(keyframe.easing))
+    ) {
+      issues.push(schemaIssue(`${path}.easing`, 'Use a named easing exported by the runtime.'));
+    }
+    validateShotSchema(keyframe, path, issues);
   });
 
   (value.cues as unknown[]).forEach((cue, index) => {
@@ -332,6 +448,7 @@ export function StudioPlayground() {
     autoPlay: false,
     loop: false,
     resolver: true,
+    depthLayers: true,
   });
   const draftResult = useMemo(() => parseStudioDefinition(draft), [draft]);
   const dirty = draft !== appliedSource;
@@ -353,7 +470,7 @@ export function StudioPlayground() {
     setCompletionCount(0);
     setSeekRequest((current) => ({ time: 0, revision: current.revision + 1 }));
     setFallbackRect(DEFAULT_FALLBACK_RECT);
-    setOptions({ autoPlay: false, loop: false, resolver: true });
+    setOptions({ autoPlay: false, loop: false, resolver: true, depthLayers: true });
     setAuthorMode('visual');
     setRevision((value) => value + 1);
   }, []);
@@ -421,6 +538,11 @@ export function StudioPlayground() {
             checked={options.resolver}
             onChange={(checked) => setOption('resolver', checked)}
           />
+          <StudioToggle
+            label="3D layers"
+            checked={options.depthLayers}
+            onChange={(checked) => setOption('depthLayers', checked)}
+          />
         </div>
         <div className="studio-command-actions">
           <button type="button" className="studio-secondary-button" onClick={resetDraft}>
@@ -476,6 +598,7 @@ export function StudioPlayground() {
           <StudioRuntime
             definition={definition}
             resolverEnabled={options.resolver}
+            depthLayers={options.depthLayers}
             completionCount={completionCount}
             draftIssues={draftResult.issues}
             seekRequest={seekRequest}
@@ -585,14 +708,17 @@ function VisualDefinitionEditor({
   const [selectedTrack, setSelectedTrack] = useState(0);
   const [selectedBeat, setSelectedBeat] = useState(0);
   const [selectedCue, setSelectedCue] = useState(0);
+  const [selectedCameraKey, setSelectedCameraKey] = useState(0);
   const mutable = cloneStudioDefinition(definition);
   const trackNames = Object.keys(mutable.tracks);
+  const cameraKeys = mutable.camera ?? [];
 
   useEffect(() => {
     setSelectedTrack((index) => Math.min(index, Math.max(0, trackNames.length - 1)));
     setSelectedBeat((index) => Math.min(index, Math.max(0, mutable.beats.length - 1)));
     setSelectedCue((index) => Math.min(index, Math.max(0, mutable.cues.length - 1)));
-  }, [mutable.beats.length, mutable.cues.length, trackNames.length]);
+    setSelectedCameraKey((index) => Math.min(index, Math.max(0, cameraKeys.length - 1)));
+  }, [mutable.beats.length, mutable.cues.length, cameraKeys.length, trackNames.length]);
 
   const mutate = (update: (next: MutableStudioDefinition) => void): void => {
     const next = cloneStudioDefinition(definition);
@@ -638,6 +764,19 @@ function VisualDefinitionEditor({
     setSelectedCue(mutable.cues.length);
   };
 
+  const addCameraKey = (): void => {
+    mutate((next) => {
+      const camera = next.camera ?? (next.camera = []);
+      const last = camera.at(-1);
+      camera.push({
+        time: last ? Math.min(next.duration, last.time + 2) : 0,
+        anchor: last?.anchor ?? 'studio-canvas',
+        easing: 'easeInOutCubic',
+      });
+    });
+    setSelectedCameraKey(cameraKeys.length);
+  };
+
   const selectBeat = (index: number): void => {
     setSection('beats');
     setSelectedBeat(index);
@@ -650,6 +789,13 @@ function VisualDefinitionEditor({
     setSelectedCue(index);
     const cue = mutable.cues[index];
     if (cue) onSeek(cue.at);
+  };
+
+  const selectCameraKey = (index: number): void => {
+    setSection('camera');
+    setSelectedCameraKey(index);
+    const keyframe = cameraKeys[index];
+    if (keyframe) onSeek(keyframe.time);
   };
 
   return (
@@ -674,10 +820,18 @@ function VisualDefinitionEditor({
           />
           <small>sec</small>
         </label>
-        <span>{trackNames.length + mutable.beats.length + mutable.cues.length} authored items</span>
+        <span>
+          {trackNames.length + mutable.beats.length + mutable.cues.length + cameraKeys.length}{' '}
+          authored items
+        </span>
       </div>
 
-      <VisualTimeline definition={mutable} onSelectBeat={selectBeat} onSelectCue={selectCue} />
+      <VisualTimeline
+        definition={mutable}
+        onSelectBeat={selectBeat}
+        onSelectCue={selectCue}
+        onSelectCameraKey={selectCameraKey}
+      />
 
       <div className="visual-section-tabs" aria-label="Definition section">
         <button
@@ -701,6 +855,13 @@ function VisualDefinitionEditor({
         >
           <MousePointerClick size={13} /> Cues <span>{mutable.cues.length}</span>
         </button>
+        <button
+          type="button"
+          data-active={section === 'camera' ? 'true' : undefined}
+          onClick={() => setSection('camera')}
+        >
+          <Orbit size={13} /> Camera <span>{cameraKeys.length}</span>
+        </button>
       </div>
 
       {section === 'tracks' ? (
@@ -718,14 +879,23 @@ function VisualDefinitionEditor({
           onSelect={selectBeat}
           onMutate={mutate}
           onAdd={addBeat}
+          cameraLaneActive={cameraKeys.length > 0}
         />
-      ) : (
+      ) : section === 'cues' ? (
         <CueVisualEditor
           definition={mutable}
           selected={selectedCue}
           onSelect={selectCue}
           onMutate={mutate}
           onAdd={addCue}
+        />
+      ) : (
+        <CameraVisualEditor
+          definition={mutable}
+          selected={selectedCameraKey}
+          onSelect={selectCameraKey}
+          onMutate={mutate}
+          onAdd={addCameraKey}
         />
       )}
     </div>
@@ -736,10 +906,12 @@ function VisualTimeline({
   definition,
   onSelectBeat,
   onSelectCue,
+  onSelectCameraKey,
 }: {
   definition: MutableStudioDefinition;
   onSelectBeat: (index: number) => void;
   onSelectCue: (index: number) => void;
+  onSelectCameraKey: (index: number) => void;
 }) {
   const position = (time: number): string =>
     `${Math.max(1.5, Math.min(98.5, (time / definition.duration) * 100))}%`;
@@ -773,6 +945,19 @@ function VisualTimeline({
             aria-label={`Edit cue ${cue.id} at ${cue.at} seconds`}
             title={`${cue.id} · ${cue.at}s`}
             onClick={() => onSelectCue(index)}
+          />
+        ))}
+      </div>
+      <div className="visual-timeline-lane" data-lane="camera">
+        <span>CAM</span>
+        {(definition.camera ?? []).map((keyframe, index) => (
+          <button
+            key={`${keyframe.anchor}-${index}`}
+            type="button"
+            style={{ left: position(keyframe.time) }}
+            aria-label={`Edit camera keyframe at ${keyframe.time} seconds`}
+            title={`${keyframe.anchor} · ${keyframe.time}s`}
+            onClick={() => onSelectCameraKey(index)}
           />
         ))}
       </div>
@@ -907,7 +1092,94 @@ function TrackVisualEditor({ definition, selected, onSelect, onMutate, onAdd }: 
   );
 }
 
-function BeatVisualEditor({ definition, selected, onSelect, onMutate, onAdd }: VisualEditorProps) {
+/** Shared shot inspector fields used by both beat shots and camera keyframes. */
+function ShotFields({
+  shot,
+  onChange,
+}: {
+  shot: CameraShot;
+  onChange: (shot: CameraShot) => void;
+}) {
+  const set = (patch: Partial<CameraShot>): void => onChange({ ...shot, ...patch });
+  return (
+    <>
+      <VisualTextField
+        label="Camera anchor"
+        value={shot.anchor}
+        mono
+        wide
+        onChange={(anchor) => set({ anchor })}
+      />
+      <VisualNumberField
+        label="Padding"
+        value={shot.padding ?? 56}
+        suffix="px"
+        onChange={(padding) => set({ padding })}
+      />
+      <VisualNumberField
+        label="Max scale"
+        value={shot.maxScale ?? 2.6}
+        step={0.1}
+        suffix="x"
+        onChange={(maxScale) => set({ maxScale })}
+      />
+      <VisualNumberField
+        label="Focus X"
+        value={shot.focusX ?? 0.5}
+        step={0.05}
+        onChange={(focusX) => set({ focusX })}
+      />
+      <VisualNumberField
+        label="Focus Y"
+        value={shot.focusY ?? 0.5}
+        step={0.05}
+        onChange={(focusY) => set({ focusY })}
+      />
+      <VisualRangeField
+        label="Yaw"
+        value={shot.yaw ?? 0}
+        min={-60}
+        max={60}
+        suffix="°"
+        onChange={(yaw) => set({ yaw })}
+      />
+      <VisualRangeField
+        label="Pitch"
+        value={shot.pitch ?? 0}
+        min={-60}
+        max={60}
+        suffix="°"
+        onChange={(pitch) => set({ pitch })}
+      />
+      <VisualRangeField
+        label="Roll"
+        value={shot.roll ?? 0}
+        min={-45}
+        max={45}
+        suffix="°"
+        onChange={(roll) => set({ roll })}
+      />
+      <VisualRangeField
+        label="Perspective"
+        value={shot.perspective ?? 1200}
+        min={300}
+        max={3200}
+        step={20}
+        suffix="px"
+        onChange={(perspective) => set({ perspective })}
+      />
+    </>
+  );
+}
+
+function BeatVisualEditor({
+  definition,
+  selected,
+  onSelect,
+  onMutate,
+  onAdd,
+  cameraLaneActive,
+}: VisualEditorProps & { cameraLaneActive: boolean }) {
   const beat = definition.beats[selected];
   const shot = beat?.shot ?? { anchor: 'studio-canvas' };
   return (
@@ -934,6 +1206,11 @@ function BeatVisualEditor({ definition, selected, onSelect, onMutate, onAdd }: V
                 })
               }
             />
+            {cameraLaneActive ? (
+              <p className="visual-lane-note">
+                <Orbit size={11} /> The camera lane is driving shots; this shot is parked.
+              </p>
+            ) : null}
             <div className="visual-field-grid">
               <VisualTextField
                 label="Title"
@@ -965,61 +1242,111 @@ function BeatVisualEditor({ definition, selected, onSelect, onMutate, onAdd }: V
                   })
                 }
               />
-              <VisualTextField
-                label="Camera anchor"
-                value={shot.anchor}
-                mono
-                wide
-                onChange={(value) =>
+              <ShotFields
+                shot={shot}
+                onChange={(nextShot) =>
                   onMutate((next) => {
-                    next.beats[selected]!.shot = { ...shot, anchor: value };
-                  })
-                }
-              />
-              <VisualNumberField
-                label="Padding"
-                value={shot.padding ?? 56}
-                suffix="px"
-                onChange={(value) =>
-                  onMutate((next) => {
-                    next.beats[selected]!.shot = { ...shot, padding: value };
-                  })
-                }
-              />
-              <VisualNumberField
-                label="Max scale"
-                value={shot.maxScale ?? 2.6}
-                step={0.1}
-                suffix="x"
-                onChange={(value) =>
-                  onMutate((next) => {
-                    next.beats[selected]!.shot = { ...shot, maxScale: value };
-                  })
-                }
-              />
-              <VisualNumberField
-                label="Focus X"
-                value={shot.focusX ?? 0.5}
-                step={0.05}
-                onChange={(value) =>
-                  onMutate((next) => {
-                    next.beats[selected]!.shot = { ...shot, focusX: value };
-                  })
-                }
-              />
-              <VisualNumberField
-                label="Focus Y"
-                value={shot.focusY ?? 0.5}
-                step={0.05}
-                onChange={(value) =>
-                  onMutate((next) => {
-                    next.beats[selected]!.shot = { ...shot, focusY: value };
+                    next.beats[selected]!.shot = nextShot;
                   })
                 }
               />
             </div>
           </>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+function CameraVisualEditor({
+  definition,
+  selected,
+  onSelect,
+  onMutate,
+  onAdd,
+}: VisualEditorProps) {
+  const camera = definition.camera ?? [];
+  const keyframe = camera[selected];
+  return (
+    <div className="visual-browser">
+      <VisualItemList
+        label="Camera keys"
+        items={camera.map((item) => ({
+          title: `${item.time}s`,
+          meta: item.anchor,
+        }))}
+        selected={selected}
+        onSelect={onSelect}
+        onAdd={onAdd}
+      />
+      <div className="visual-inspector">
+        {keyframe ? (
+          <>
+            <VisualInspectorHeader
+              eyebrow={`Camera key ${selected + 1}`}
+              title={keyframe.anchor}
+              onDelete={() =>
+                onMutate((next) => {
+                  next.camera?.splice(selected, 1);
+                })
+              }
+            />
+            <p className="visual-lane-note">
+              <Orbit size={11} /> Camera keyframes drive the shot; beat shots are parked.
+            </p>
+            <div className="visual-field-grid">
+              <VisualNumberField
+                label="Time"
+                value={keyframe.time}
+                step={0.1}
+                suffix="sec"
+                onChange={(value) =>
+                  onMutate((next) => {
+                    next.camera![selected]!.time = value;
+                  })
+                }
+              />
+              <label className="visual-field">
+                <span>Easing</span>
+                <div>
+                  <select
+                    aria-label="Camera keyframe easing"
+                    value={keyframe.easing ?? 'linear'}
+                    onChange={(event) =>
+                      onMutate((next) => {
+                        next.camera![selected]!.easing = event.currentTarget.value;
+                      })
+                    }
+                  >
+                    {Array.from(EASING_NAMES).map((easing) => (
+                      <option key={easing} value={easing}>
+                        {easing}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </label>
+              <ShotFields
+                shot={keyframe}
+                onChange={(nextShot) =>
+                  onMutate((next) => {
+                    const current = next.camera![selected]!;
+                    next.camera![selected] = {
+                      ...nextShot,
+                      time: current.time,
+                      easing: current.easing,
+                    };
+                  })
+                }
+              />
+            </div>
+          </>
+        ) : (
+          <p className="visual-lane-note">
+            <Orbit size={11} /> No camera keyframes yet — add one to keep the camera moving inside a
+            beat.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -1239,6 +1566,49 @@ function VisualNumberField({
   );
 }
 
+function VisualRangeField({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  suffix,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  suffix?: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="visual-field visual-range-field" data-wide="true">
+      <span>{label}</span>
+      <div>
+        <input
+          type="range"
+          aria-label={`${label} slider`}
+          min={min}
+          max={max}
+          step={step}
+          value={Math.max(min, Math.min(max, value))}
+          onChange={(event) => onChange(inputNumber(event.currentTarget.value, value))}
+        />
+        <input
+          type="number"
+          aria-label={label}
+          step={step}
+          value={value}
+          onChange={(event) => onChange(inputNumber(event.currentTarget.value, value))}
+        />
+        {suffix ? <small>{suffix}</small> : null}
+      </div>
+    </label>
+  );
+}
+
 function StudioToggle({
   label,
   checked,
@@ -1281,6 +1651,7 @@ function DraftStatus({ issues, dirty }: { issues: StudioIssue[]; dirty: boolean 
 function StudioRuntime({
   definition,
   resolverEnabled,
+  depthLayers,
   completionCount,
   draftIssues,
   seekRequest,
@@ -1289,6 +1660,7 @@ function StudioRuntime({
 }: {
   definition: AnySequenceDefinition;
   resolverEnabled: boolean;
+  depthLayers: boolean;
   completionCount: number;
   draftIssues: StudioIssue[];
   seekRequest: StudioSeekRequest;
@@ -1320,6 +1692,7 @@ function StudioRuntime({
     resolveAnchor: resolverEnabled ? resolveAnchor : undefined,
     fallbackRect: resolveFallback,
     hideUntilReady: true,
+    depthLayers,
     onReady,
   });
 
@@ -1367,6 +1740,7 @@ function StudioRuntime({
         <div className="studio-preview-canvas">
           <div ref={viewportRef} className="studio-camera-viewport">
             <div ref={stageRef} className="studio-stage" style={stageStyle}>
+              <div className="studio-stage-backdrop" aria-hidden {...cameraLayerProps(-140)} />
               <CameraAnchor anchor="studio-canvas" className="studio-canvas-anchor">
                 <header className="studio-film-header">
                   <div>
@@ -1396,11 +1770,15 @@ function StudioRuntime({
                   <span />
                 </div>
               </CameraAnchor>
-              <div className="studio-resolver-target" data-studio-resolver="true">
+              <div
+                className="studio-resolver-target"
+                data-studio-resolver="true"
+                {...cameraLayerProps(150)}
+              >
                 <Crosshair size={26} />
                 <span>virtual-focus</span>
               </div>
-              <div className="studio-fallback-ghost" aria-hidden>
+              <div className="studio-fallback-ghost" aria-hidden {...cameraLayerProps(40)}>
                 function fallback
               </div>
             </div>
@@ -1562,6 +1940,21 @@ function StudioInspector({
           <span>x {pose.x.toFixed(1)}</span>
           <span>y {pose.y.toFixed(1)}</span>
           <strong>{pose.scale.toFixed(3)}x</strong>
+        </div>
+        <div className="studio-pose-result">
+          <span>yaw {(activeShot?.yaw ?? 0).toFixed(1)}°</span>
+          <span>pitch {(activeShot?.pitch ?? 0).toFixed(1)}°</span>
+          <span>roll {(activeShot?.roll ?? 0).toFixed(1)}°</span>
+          <strong>
+            {((activeShot?.perspective ??
+            ((activeShot?.yaw ?? 0) !== 0 ||
+              (activeShot?.pitch ?? 0) !== 0 ||
+              (activeShot?.roll ?? 0) !== 0))
+              ? (activeShot?.perspective ?? 1200)
+              : 0
+            ).toFixed(0)}
+            px
+          </strong>
         </div>
       </section>
 

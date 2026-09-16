@@ -63,6 +63,9 @@ Do not mount an automatic clock and a step controller to own the same flow.
   anchor resolver.
 - Use `fallbackRect` when an anchor may mount late or temporarily have no layout
   box.
+- Angled shots (`yaw`, `pitch`, `roll`, `perspective`) and `camera` keyframe
+  lanes work on any stage. Depth layers additionally need `depthLayers: true`
+  on the camera hook and `preserve3dProps()` on intermediate wrappers.
 - Treat cues as host notifications. Execute only allowlisted commands and
   reconstruct visible state declaratively after seeking.
 - Keep `useSequenceFrame()` in a small conductor and quantize values before passing

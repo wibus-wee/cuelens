@@ -1,5 +1,17 @@
-import type { CameraShot } from './camera.ts';
-import { evaluateTimeline, timelineDuration, type NumericTimeline } from './timeline.ts';
+import {
+  DEFAULT_CAMERA_MAX_SCALE,
+  DEFAULT_CAMERA_PADDING,
+  DEFAULT_CAMERA_PERSPECTIVE,
+  MIN_CAMERA_SCALE,
+  type CameraShot,
+} from './camera.ts';
+import { resolveEasing, type EasingFunction, type EasingName } from './easing.ts';
+import {
+  evaluateTimeline,
+  interpolate,
+  timelineDuration,
+  type NumericTimeline,
+} from './timeline.ts';
 
 export type SequenceBeat<
   BeatId extends string = string,
@@ -29,6 +41,18 @@ export type SequenceCue<
   payload?: Payload;
 };
 
+/**
+ * A timed camera target on the sequence's camera lane. Numeric shot fields
+ * interpolate between keyframes with the easing of the segment's end keyframe;
+ * the anchor is discrete and holds the segment's start value.
+ */
+export type CameraKeyframe<Anchor extends string = string> = CameraShot<Anchor> & {
+  /** Seconds from the start of the sequence. */
+  time: number;
+  /** Easing for the segment ending at this keyframe. */
+  easing?: EasingName | EasingFunction;
+};
+
 export type SequenceDefinition<
   Track extends string = string,
   BeatId extends string = string,
@@ -41,6 +65,11 @@ export type SequenceDefinition<
   tracks: NumericTimeline<Track>;
   beats: readonly SequenceBeat<BeatId, Anchor, BeatMetadata>[];
   cues: readonly SequenceCue<CueId, Anchor, CuePayload>[];
+  /**
+   * Continuous camera lane. When present it drives the frame's shot instead of
+   * beat shots, so the camera can keep moving inside a single beat.
+   */
+  camera?: readonly CameraKeyframe<Anchor>[];
 };
 
 export type AnySequenceDefinition = SequenceDefinition<
@@ -89,6 +118,107 @@ export function beatAt<Definition extends AnySequenceDefinition>(
   return index < 0 ? null : (definition.beats[index] ?? null);
 }
 
+const CAMERA_LANE_FIELDS = [
+  'padding',
+  'minScale',
+  'maxScale',
+  'zoom',
+  'focusX',
+  'focusY',
+  'yaw',
+  'pitch',
+  'roll',
+  'perspective',
+] as const;
+
+type CameraLaneField = (typeof CAMERA_LANE_FIELDS)[number];
+
+const CAMERA_LANE_DEFAULTS: Record<CameraLaneField, number> = {
+  padding: DEFAULT_CAMERA_PADDING,
+  minScale: MIN_CAMERA_SCALE,
+  maxScale: DEFAULT_CAMERA_MAX_SCALE,
+  zoom: 1,
+  focusX: 0.5,
+  focusY: 0.5,
+  yaw: 0,
+  pitch: 0,
+  roll: 0,
+  perspective: 0,
+};
+
+/** Field value at a keyframe, filled with the same default the solver would use. */
+function cameraKeyframeValue(keyframe: CameraKeyframe, field: CameraLaneField): number {
+  const value = keyframe[field];
+  if (value !== undefined && Number.isFinite(value)) return value;
+  if (field === 'perspective') {
+    const angled =
+      (keyframe.yaw ?? 0) !== 0 || (keyframe.pitch ?? 0) !== 0 || (keyframe.roll ?? 0) !== 0;
+    return angled ? DEFAULT_CAMERA_PERSPECTIVE : 0;
+  }
+  return CAMERA_LANE_DEFAULTS[field];
+}
+
+function shotFromCameraKeyframe<Anchor extends string>(
+  keyframe: CameraKeyframe<Anchor>
+): CameraShot<Anchor> {
+  const { time: _time, easing: _easing, ...shot } = keyframe;
+  return shot;
+}
+
+/**
+ * Perspective is a lens distance: interpolating it linearly sweeps through
+ * small values where `P / (P - z)` explodes or flips depth layers. Blend the
+ * reciprocal (focal power) instead — `0` acts as an infinitely distant lens —
+ * so the emitted value never drops below the nearer endpoint.
+ */
+function interpolatePerspective(a: number, b: number, progress: number): number {
+  if (a <= 0 && b <= 0) return 0;
+  const inverse = interpolate(a > 0 ? 1 / a : 0, b > 0 ? 1 / b : 0, progress);
+  return inverse > 1e-6 ? 1 / inverse : 0;
+}
+
+/**
+ * Evaluate the camera lane at a time. Clamps outside the authored range,
+ * eases numeric fields across each segment, and holds the start anchor until
+ * the next keyframe so cuts stay discrete while angles move continuously.
+ */
+export function evaluateCameraKeyframes<Anchor extends string>(
+  keyframes: readonly CameraKeyframe<Anchor>[] | undefined,
+  time: number
+): CameraShot<Anchor> | null {
+  if (!keyframes || keyframes.length === 0) return null;
+  const first = keyframes[0]!;
+  if (time <= first.time) return shotFromCameraKeyframe(first);
+  const last = keyframes[keyframes.length - 1]!;
+  if (time >= last.time) return shotFromCameraKeyframe(last);
+
+  for (let index = 1; index < keyframes.length; index += 1) {
+    const end = keyframes[index]!;
+    if (time >= end.time) continue;
+    const start = keyframes[index - 1]!;
+    const span = end.time - start.time;
+    const progress = span <= 0 ? 1 : resolveEasing(end.easing)((time - start.time) / span);
+    const shot: CameraShot<Anchor> = { anchor: start.anchor };
+    for (const field of CAMERA_LANE_FIELDS) {
+      if (start[field] === undefined && end[field] === undefined) continue;
+      shot[field] =
+        field === 'perspective'
+          ? interpolatePerspective(
+              cameraKeyframeValue(start, field),
+              cameraKeyframeValue(end, field),
+              progress
+            )
+          : interpolate(
+              cameraKeyframeValue(start, field),
+              cameraKeyframeValue(end, field),
+              progress
+            );
+    }
+    return shot;
+  }
+  return shotFromCameraKeyframe(last);
+}
+
 export function frameAt<
   Track extends string,
   BeatId extends string,
@@ -109,7 +239,7 @@ export function frameAt<
     values: evaluateTimeline(definition.tracks, time),
     beat,
     beatIndex,
-    shot: beat?.shot ?? null,
+    shot: evaluateCameraKeyframes(definition.camera, time) ?? beat?.shot ?? null,
   };
 }
 
@@ -124,7 +254,10 @@ export type SequenceValidationIssue = {
     | 'duplicate-cue-id'
     | 'cue-out-of-range'
     | 'cue-lead-before-start'
-    | 'unsorted-cues';
+    | 'unsorted-cues'
+    | 'invalid-camera-key'
+    | 'camera-key-out-of-range'
+    | 'unsorted-camera-keys';
   path: string;
   message: string;
 };
@@ -171,6 +304,36 @@ export function validateSequence(definition: AnySequenceDefinition): SequenceVal
         message: `Cue "${cue.id}" begins approaching before the sequence starts.`,
       });
     }
+  });
+
+  let previousKeyTime = Number.NEGATIVE_INFINITY;
+  definition.camera?.forEach((keyframe, index) => {
+    if (typeof keyframe.anchor !== 'string' || keyframe.anchor.length === 0) {
+      issues.push({
+        code: 'invalid-camera-key',
+        path: `camera.${index}.anchor`,
+        message: `Camera keyframe ${index} must name an anchor.`,
+      });
+    }
+    if (
+      !Number.isFinite(keyframe.time) ||
+      keyframe.time < 0 ||
+      keyframe.time > definition.duration
+    ) {
+      issues.push({
+        code: 'camera-key-out-of-range',
+        path: `camera.${index}.time`,
+        message: `Camera keyframe ${index} is outside the sequence.`,
+      });
+    }
+    if (keyframe.time < previousKeyTime) {
+      issues.push({
+        code: 'unsorted-camera-keys',
+        path: `camera.${index}.time`,
+        message: 'Camera keyframes must be sorted by time.',
+      });
+    }
+    previousKeyTime = keyframe.time;
   });
 
   if (timelineDuration(definition.tracks) > definition.duration) {

@@ -235,6 +235,47 @@ observation wakes the camera when product state changes or a missing anchor
 appears. The returned `refresh()` method handles geometry changes that those
 observers cannot detect.
 
+### Orientation and depth
+
+A shot may declare `yaw`, `pitch`, `roll`, and `perspective`. Orientation is a
+first-class spring axis: the camera integrates each angle with the same
+critically damped motion as position, so a shot change curves the frame rather
+than cutting it.
+
+Spatial poses move `transform-origin` to the tracked subject and compose as
+
+```text
+translate3d(focus - origin)
+  perspective(P) rotateY(yaw) rotateX(pitch) rotateZ(roll) scale(s)
+```
+
+so the subject stays put while the stage rotates around it. Any angle implies a
+`1200px` perspective; setting `perspective` alone keeps the stage flat but gives
+depth layers parallax. The lens distance is the one non-spring axis: it tracks
+the target instantly because sweeping through tiny perspectives under rotation
+inverts the projection. For the same reason a camera lane blends `perspective`
+by reciprocal — `1/P` interpolates linearly, `0` behaves as an infinitely
+distant lens — so ramping toward flat can never dip below the nearer
+endpoint's lens distance.
+
+Under rotation or perspective, a rendered bounding box is a projected quad
+rather than an axis-aligned rectangle. Measurement then walks the
+`offsetParent` chain — layout coordinates are immune to the camera's own
+transform — and falls back to scaled-rect math when the anchor lives outside
+that chain.
+
+A definition may also carry a `camera` lane: sorted keyframes of full shots
+with `time` and `easing`. Numeric fields interpolate; the anchor holds each
+segment's start value. A non-empty lane overrides `beat.shot` in the derived
+frame, which lets the camera keep moving inside one beat without giving the
+spring a second clock.
+
+Depth layers are host-authored: `cameraLayerProps(depth)` marks a stage child
+with `data-cuelens-depth` and a `translateZ`, `depthLayers: true` keeps
+`preserve-3d` on the stage, and `preserve3dProps()` carries 3D space across
+intermediate wrappers. Grouping properties such as `overflow: hidden` flatten
+subtrees, so layers must live outside them.
+
 ## Cue and seek semantics
 
 Seeking is state reconstruction, not accelerated playback.
@@ -449,6 +490,10 @@ Implemented:
 - cue crossing, rewind re-arming, restart, and wrap behavior;
 - generic DOM anchors and custom resolvers;
 - transform-aware fit camera with logarithmic spring motion;
+- shot orientation (yaw, pitch, roll), an implied or explicit perspective
+  lens, and host-authored depth layers;
+- a definition-level camera lane whose keyframes interpolate shots inside a
+  beat;
 - synchronous first pose, fallback framing, observation, exact settle, and
   explicit refresh;
 - React providers, hooks, external-store subscriptions, and StrictMode-safe

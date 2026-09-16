@@ -16,6 +16,7 @@ import {
 import {
   applyCameraPose,
   cameraAtRest,
+  cameraLayerProps,
   cameraPoseFromMotion,
   cameraTargetFromPose,
   createCameraMotion,
@@ -268,6 +269,11 @@ type CameraRuntimeOptions<Anchor extends string> = {
   fallbackRect?: CameraFallback;
   /** Keep the stage hidden until its first camera transform has been composed. */
   hideUntilReady?: boolean;
+  /**
+   * Keep `preserve-3d` on the stage so `cameraLayerProps()` children stay
+   * dimensional even between angled shots. Enable when the stage hosts layers.
+   */
+  depthLayers?: boolean;
   /** Runs once after each newly mounted stage receives its first valid pose. */
   onReady?: (pose: CameraPose) => void;
 };
@@ -301,12 +307,14 @@ function useImperativeCamera<Anchor extends string = string>(
   const inputsRef = useRef({
     fallbackRect: options.fallbackRect,
     hideUntilReady: options.hideUntilReady ?? false,
+    depthLayers: options.depthLayers ?? false,
     onReady: options.onReady,
     resolveAnchor: options.resolveAnchor,
   });
   inputsRef.current = {
     fallbackRect: options.fallbackRect,
     hideUntilReady: options.hideUntilReady ?? false,
+    depthLayers: options.depthLayers ?? false,
     onReady: options.onReady,
     resolveAnchor: options.resolveAnchor,
   };
@@ -389,6 +397,11 @@ function useImperativeCamera<Anchor extends string = string>(
         return;
       }
       const fallback = inputsRef.current.fallbackRect;
+      const spatial =
+        (motionRef.current.yaw ?? 0) !== 0 ||
+        (motionRef.current.pitch ?? 0) !== 0 ||
+        (motionRef.current.roll ?? 0) !== 0 ||
+        (motionRef.current.perspective ?? 0) > 0;
       const rect = framing.read(
         shot,
         () => {
@@ -402,7 +415,8 @@ function useImperativeCamera<Anchor extends string = string>(
             ? measureCameraAnchor(
                 stage,
                 anchorNode,
-                motionRef.current.scale > 0 ? motionRef.current.scale : 1
+                motionRef.current.scale > 0 ? motionRef.current.scale : 1,
+                spatial
               )
             : null;
         },
@@ -417,7 +431,7 @@ function useImperativeCamera<Anchor extends string = string>(
         if (cameraAtRest(motion, target)) motion = createCameraMotion(target);
         motionRef.current = motion;
         const pose = cameraPoseFromMotion(motion, viewportSize);
-        applyCameraPose(stage, pose);
+        applyCameraPose(stage, pose, inputsRef.current.depthLayers);
         revealStage(stage, pose);
       }
 
@@ -487,6 +501,7 @@ export function useSequenceCamera<Anchor extends string = string>({
   resolveAnchor: customResolver,
   fallbackRect,
   hideUntilReady,
+  depthLayers,
   onReady,
 }: UseSequenceCameraOptions<Anchor>): { refresh: () => void } {
   const { clock, definition } = useSequenceContext();
@@ -505,6 +520,7 @@ export function useSequenceCamera<Anchor extends string = string>({
     resolveAnchor: customResolver,
     fallbackRect,
     hideUntilReady,
+    depthLayers,
     onReady,
     source,
   });
@@ -546,6 +562,7 @@ export function useSequenceStepCamera<Anchor extends string = string>({
   resolveAnchor: customResolver,
   fallbackRect,
   hideUntilReady,
+  depthLayers,
   onReady,
 }: UseSequenceStepCameraOptions<Anchor>): { refresh: () => void } {
   const controller = useSequenceStepController();
@@ -564,6 +581,7 @@ export function useSequenceStepCamera<Anchor extends string = string>({
     resolveAnchor: customResolver,
     fallbackRect,
     hideUntilReady,
+    depthLayers,
     onReady,
     source,
   });
@@ -579,4 +597,22 @@ export const CameraAnchor = forwardRef<HTMLDivElement, CameraAnchorProps>(functi
   ref
 ) {
   return <div ref={ref} data-cuelens-anchor={anchor} {...props} />;
+});
+
+export type CameraLayerProps = HTMLAttributes<HTMLDivElement> & {
+  /** Depth in px toward the viewer while the camera has a perspective. */
+  depth?: number;
+};
+
+/**
+ * Depth layer wrapper. Children keep their layout position but render `depth`
+ * px toward the viewer while the camera pose has a perspective. Pair with the
+ * `depthLayers` camera option so the stage keeps `preserve-3d` between shots.
+ */
+export const CameraLayer = forwardRef<HTMLDivElement, CameraLayerProps>(function CameraLayer(
+  { depth = 0, style, ...props },
+  ref
+) {
+  const layer = cameraLayerProps(depth);
+  return <div ref={ref} {...props} {...layer} style={{ ...layer.style, ...style }} />;
 });
