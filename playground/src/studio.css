@@ -345,7 +345,7 @@
 
 .visual-timeline {
   display: grid;
-  grid-template-rows: 24px 1fr 1fr;
+  grid-template-rows: 24px 1fr 1fr 1fr;
   min-width: 0;
   padding: 0 12px 9px;
   border-bottom: 1px solid #d7dcd6;
@@ -399,6 +399,14 @@
   transform: translateX(-50%) rotate(45deg);
 }
 
+.visual-timeline-lane[data-lane='camera'] button {
+  width: 12px;
+  height: 8px;
+  border-color: #168468;
+  border-radius: 2px;
+  transform: translateX(-50%);
+}
+
 .visual-timeline-lane button:hover,
 .visual-timeline-lane button:focus-visible {
   z-index: 2;
@@ -410,9 +418,14 @@
   background: #e76547;
 }
 
+.visual-timeline-lane[data-lane='camera'] button:hover,
+.visual-timeline-lane[data-lane='camera'] button:focus-visible {
+  background: #168468;
+}
+
 .visual-section-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   min-width: 0;
   padding: 4px 8px;
   border-bottom: 1px solid #d9ddd8;
@@ -614,6 +627,7 @@
 }
 
 .visual-field input,
+.visual-field select,
 .keyframe-row input,
 .keyframe-row select {
   width: 100%;
@@ -646,6 +660,49 @@
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 7px;
   pointer-events: none;
+}
+
+.visual-range-field > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px;
+  align-items: center;
+  gap: 8px;
+}
+
+.visual-range-field input[type='range'] {
+  height: 3px;
+  padding: 0;
+  appearance: none;
+  border: 0;
+  border-radius: 0;
+  background: #c9d0c9;
+}
+
+.visual-range-field input[type='range']::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  appearance: none;
+  border: 2px solid #168468;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+}
+
+.visual-range-field input[type='number'] {
+  font-family: 'SFMono-Regular', Consolas, monospace;
+}
+
+.visual-lane-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 6px 8px;
+  border-left: 2px solid #168468;
+  color: #3f5a4f;
+  background: #edf4ef;
+  font-size: 9px;
+  line-height: 1.5;
 }
 
 .keyframe-list {
@@ -790,8 +847,13 @@
   width: 960px;
   height: 600px;
   color: #17201b;
-  background: #eef0ec;
   will-change: transform;
+}
+
+.studio-stage-backdrop {
+  position: absolute;
+  inset: 0;
+  background: #eef0ec;
 }
 
 .studio-canvas-anchor {

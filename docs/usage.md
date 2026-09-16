@@ -492,13 +492,102 @@ animation or relevant DOM activity remains.
 
 Shot controls are:
 
-| Property                | Meaning                                                                |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `anchor`                | Stable host-owned subject name.                                        |
-| `padding`               | Minimum viewport breathing room before fitting.                        |
-| `minScale` / `maxScale` | Bounds that prevent unusable wide shots or extreme magnification.      |
-| `zoom`                  | Multiplier relative to the fitted scale.                               |
-| `focusX` / `focusY`     | Subject placement in the viewport from `0` to `1`; defaults to center. |
+| Property                 | Meaning                                                                |
+| ------------------------ | ---------------------------------------------------------------------- |
+| `anchor`                 | Stable host-owned subject name.                                        |
+| `padding`                | Minimum viewport breathing room before fitting.                        |
+| `minScale` / `maxScale`  | Bounds that prevent unusable wide shots or extreme magnification.      |
+| `zoom`                   | Multiplier relative to the fitted scale.                               |
+| `focusX` / `focusY`      | Subject placement in the viewport from `0` to `1`; defaults to center. |
+| `yaw` / `pitch` / `roll` | Camera orientation around the subject, in degrees.                     |
+| `perspective`            | Lens distance in px; implied (`1200`) when an angle is set.            |
+
+## Frame shots in 3D
+
+A shot stays flat until it declares an angle. `yaw` orbits around the vertical
+axis through the subject, `pitch` tilts the horizontal axis, and `roll` spins
+the frame like a dutch angle. The camera pivots around the tracked subject
+centre, so the subject stays framed while the world tilts:
+
+```ts
+{
+  id: 'inspect',
+  at: 7,
+  shot: { anchor: 'side-panel', maxScale: 1.8, yaw: -18, pitch: 6 }
+}
+```
+
+Any angle implies a `perspective` of `1200px`. Set `perspective` explicitly for
+a longer or wider lens, or set it alone to give depth layers parallax without
+tilting the stage. Orientation shares the spring physics, so an in-flight
+camera curves into a new angle exactly like it curves into a new position.
+The lens distance itself switches instantly with the target — springing through
+very small perspectives while geometry is rotated would invert the projection.
+On a camera lane, `perspective` blends in focal-power space (`1/P`, with `0`
+meaning an infinitely distant lens), so a ramp toward flat eases out to
+orthographic instead of sweeping through tiny lens distances.
+
+### Continuous camera moves
+
+Beat shots change only at beat boundaries. For orbits, drifts, and push-ins
+inside a single beat, author a camera lane on the definition:
+
+```ts
+const sequence = defineSequence({
+  duration: 12,
+  tracks: {
+    /* ... */
+  },
+  beats: [
+    /* ... */
+  ],
+  cues: [
+    /* ... */
+  ],
+  camera: [
+    { time: 0, anchor: 'window', yaw: -12, pitch: 4 },
+    { time: 6, anchor: 'window', yaw: 14, roll: -2, easing: 'easeInOutCubic' },
+    { time: 9, anchor: 'composer', zoom: 1.6, yaw: 0, pitch: 0, roll: 0 },
+  ],
+});
+```
+
+Numeric shot fields interpolate with the segment's easing; the anchor holds
+each segment's start value and cuts at keyframe times. A non-empty camera lane
+drives `frame.shot` and parks `beat.shot`. The spring still smooths the
+interpolated target, so authored moves keep the camera's physical feel.
+
+### Depth layers
+
+Mark stage children with `cameraLayerProps(depth)` — or the `<CameraLayer>`
+React wrapper — to lift them toward the viewer by `depth` px while the camera
+has a perspective:
+
+```tsx
+<div ref={stageRef}>
+  <main {...cameraAnchorProps('window')} {...cameraLayerProps(-60)}>
+    ...
+  </main>
+  <div className="floating-card" {...cameraLayerProps(160)}>
+    ...
+  </div>
+</div>
+```
+
+Depth layers need two things:
+
+- Enable `depthLayers: true` on the camera hook so the stage keeps
+  `transform-style: preserve-3d`.
+- Every wrapper between the stage and a layer must preserve 3D space. Use
+  `preserve3dProps()` on intermediate wrappers. `overflow: hidden`,
+  `overflow: clip`, filters, and similar grouping properties flatten a subtree
+  and cannot be made to preserve depth — keep layers outside such containers.
+
+While the pose is rotated or under perspective, anchor measurement switches to
+layout coordinates via the `offsetParent` chain, so the camera never chases its
+own distortion. Anchors outside that chain — fixed-position nodes, portals,
+shadow boundaries — fall back to rendered-rect measurement and may read loosely
+while rotated.
 
 ## Cue, seek, restart, and loop semantics
 

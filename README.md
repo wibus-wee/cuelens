@@ -60,7 +60,12 @@ const sequence = defineSequence({
   },
   beats: [
     { id: 'wide', at: 0, title: 'Workspace', shot: { anchor: 'window' } },
-    { id: 'write', at: 3, title: 'Composer', shot: { anchor: 'composer', maxScale: 1.5 } },
+    {
+      id: 'write',
+      at: 3,
+      title: 'Composer',
+      shot: { anchor: 'composer', maxScale: 1.5, yaw: -14, pitch: 5 },
+    },
   ],
   cues: [{ id: 'send', at: 5.5, anchor: 'send', kind: 'press' }],
 });

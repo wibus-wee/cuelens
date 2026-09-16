@@ -37,6 +37,7 @@ import {
   defineSequenceSteps,
   defineSequenceTriggers,
   cameraAnchorProps,
+  cameraLayerProps,
   type CameraShot,
 } from '@wibus/cuelens';
 import {
@@ -97,7 +98,14 @@ const guidedSequence = defineSequenceSteps({
     {
       id: 'review',
       state: { activeScene: 3, comments: 4, progress: 0.72, status: 'review' },
-      shot: { anchor: 'review-panel', padding: 68, maxScale: 1.75, focusX: 0.58 },
+      shot: {
+        anchor: 'review-panel',
+        padding: 68,
+        maxScale: 1.75,
+        focusX: 0.58,
+        yaw: -14,
+        pitch: 5,
+      },
       metadata: { label: 'Review', note: 'Follow a changing panel' },
     },
     {
@@ -168,6 +176,44 @@ const timelineSequence = defineSequence({
     { id: 'select-scene', at: 5, anchor: 'story-canvas', kind: 'point' },
     { id: 'open-review', at: 10, anchor: 'review-panel', kind: 'point' },
     { id: 'publish-ready', at: 15.5, anchor: 'publish', kind: 'confirm' },
+  ],
+  // The camera lane keeps the frame drifting inside each beat; anchors cut at
+  // the same times the beat shots used to switch.
+  camera: [
+    { time: 0, anchor: 'window', padding: 44, maxScale: 1.1, yaw: -9, pitch: 4 },
+    {
+      time: 4,
+      anchor: 'story-canvas',
+      padding: 82,
+      maxScale: 1.55,
+      focusX: 0.48,
+      yaw: 10,
+      pitch: -3,
+      roll: -1.5,
+      easing: 'easeInOutCubic',
+    },
+    {
+      time: 9,
+      anchor: 'review-panel',
+      padding: 68,
+      maxScale: 1.75,
+      focusX: 0.58,
+      yaw: 16,
+      pitch: 6,
+      easing: 'easeInOutCubic',
+    },
+    {
+      time: 14,
+      anchor: 'publish',
+      padding: 170,
+      maxScale: 2.1,
+      focusX: 0.62,
+      focusY: 0.42,
+      yaw: 0,
+      pitch: 0,
+      roll: 0,
+      easing: 'easeOutCubic',
+    },
   ],
 });
 
@@ -572,6 +618,7 @@ function GuidedCameraViewport({
     stageRef,
     fallbackRect: FALLBACK_RECT,
     hideUntilReady: true,
+    depthLayers: true,
     onReady,
   });
 
@@ -611,6 +658,7 @@ function TimelineCameraViewport({
     stageRef,
     fallbackRect: FALLBACK_RECT,
     hideUntilReady: true,
+    depthLayers: true,
     onReady,
   });
 
@@ -683,7 +731,11 @@ const ProductStage = forwardRef<
       data-debug-anchors={debug ? 'true' : undefined}
       style={{ width: STAGE_WIDTH, height: STAGE_HEIGHT }}
     >
-      <article className="product-window" {...anchor('window')}>
+      <div className="stage-depth-chip" aria-hidden {...cameraLayerProps(140)}>
+        <span>CAM</span>
+        <strong>3D orbit</strong>
+      </div>
+      <article className="product-window" {...anchor('window')} {...cameraLayerProps(24)}>
         <header className="product-topbar">
           <div className="product-project">
             <span className="project-symbol">
