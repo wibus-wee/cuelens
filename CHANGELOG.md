@@ -6,6 +6,8 @@ series.
 
 ## Unreleased
 
+## 0.3.0 - 2026-09-19
+
 ### Added
 
 - Camera orientation on shots: `yaw`, `pitch`, and `roll` in degrees plus an
